@@ -7,8 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# node_modules
 node_modules
-dist
+# dist is included so the client can download and run without Node.js
+# dist
 dist-ssr
 *.local
 
