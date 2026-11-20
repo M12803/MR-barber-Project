@@ -1,63 +1,37 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { formatCurrency, formatDateTime } from '../../lib/utils';
-import { exportService } from '../../services/exportService';
+import { formatCurrency } from '../../lib/utils';
+import { reportService } from '../../services/reportService';
 import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
 import {
   FileSpreadsheet,
   Download,
-  Calendar,
-  TrendingUp,
   Users,
+  TrendingUp,
+  HandCoins,
+  Scissors,
+  Trophy,
   Wallet,
-  ArrowDownCircle,
   Coins,
 } from 'lucide-react';
 
 export const ReportsView: React.FC = () => {
-  const { db } = useApp();
-  const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
+  const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'all'>('today');
 
-  // Compute metrics
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-
-  const filteredTx = db.transactions.filter(t => {
-    if (t.status === 'VOIDED') return false;
-    if (period === 'today') {
-      return t.createdAt.startsWith(todayStr);
-    }
-    if (period === 'month') {
-      const currentMonth = todayStr.slice(0, 7);
-      return t.createdAt.startsWith(currentMonth);
-    }
-    return true;
-  });
-
-  const totalGross = filteredTx.reduce((s, t) => s + t.grossTotal, 0);
-  const totalDiscounts = filteredTx.reduce((s, t) => s + t.discountTotal, 0);
-  const totalCollected = filteredTx.reduce((s, t) => s + t.collectedAmount, 0);
-  const totalCommissions = filteredTx.reduce((s, t) => s + t.commissionSnapshot.totalCommission, 0);
-
-  const filteredExpenses = db.expenses.filter(e => {
-    if (period === 'today') return e.date.startsWith(todayStr);
-    if (period === 'month') return e.date.startsWith(todayStr.slice(0, 7));
-    return true;
-  });
-  const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
-
-  const estimatedShopMargin = totalCollected - totalCommissions - totalExpenses;
+  const report = reportService.getPeriodReport(period);
 
   return (
     <div className="flex-1 p-6 space-y-6 overflow-y-auto bg-dark-950 select-none">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+          <h2 className="text-xl font-black text-slate-100 flex items-center gap-2 font-display">
             <FileSpreadsheet className="w-5 h-5 text-gold-400" />
-            <span>التقارير التحليلية وتصدير البيانات (Reports & Excel)</span>
+            <span>التقارير والإحصائيات الشاملة</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            إحصائيات الإيرادات، العمولات، الأرباح، وتصدير دفتر العمليات الكامل إلى ملف Excel (.xlsx)
+            إجمالي الدخل، إحصائيات كل خدمة، أداء الحلاقين، وحسابات حركة درج المحل
           </p>
         </div>
 
@@ -65,25 +39,25 @@ export const ReportsView: React.FC = () => {
           variant="gold"
           size="md"
           className="shadow-gold-md"
-          onClick={() => exportService.exportFullWorkbook()}
+          onClick={() => reportService.exportToExcel(period)}
         >
           <Download className="w-4 h-4 ml-2" />
-          تصدير مصنف Excel كامل (10 شيتات)
+          <span>تصدير التقرير إلى Excel (.xlsx)</span>
         </Button>
       </div>
 
-      {/* Period Filter Tabs */}
+      {/* Period Selection Tabs */}
       <div className="flex items-center gap-2 bg-dark-900 border border-dark-800 p-1.5 rounded-2xl w-fit">
         {[
-          { id: 'today', label: 'اليوم' },
-          { id: 'week', label: 'هذا الأسبوع' },
-          { id: 'month', label: 'هذا الشهر' },
-          { id: 'all', label: 'جميع الفترات' },
+          { id: 'today', label: 'يومي (اليوم)' },
+          { id: 'week', label: 'أسبوعي (آخر 7 أيام)' },
+          { id: 'month', label: 'شهري (الشهر الحالي)' },
+          { id: 'all', label: 'كل الفترات' },
         ].map(p => (
           <button
             key={p.id}
             onClick={() => setPeriod(p.id as any)}
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
               period === p.id
                 ? 'bg-gold-500 text-dark-950 shadow-gold-sm'
                 : 'text-slate-400 hover:text-white'
@@ -94,110 +68,166 @@ export const ReportsView: React.FC = () => {
         ))}
       </div>
 
-      {/* Financial Overview Cards */}
+      {/* Primary KPI Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-dark-900 border border-dark-800 p-5 rounded-2xl">
+        {/* Metric 1: Total Service Revenue */}
+        <div className="bg-dark-900 border border-dark-800 p-5 rounded-3xl">
           <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span>إجمالي الإيراد المحصل</span>
+            <span>إجمالي إيراد الحلاقة</span>
             <TrendingUp className="w-4 h-4 text-gold-400" />
           </div>
-          <div className="text-2xl font-black text-gold-400 font-mono mt-2">
-            {formatCurrency(totalCollected)}
+          <div className="text-3xl font-black text-gold-400 font-mono mt-2">
+            {formatCurrency(report.totalRevenue)}
           </div>
           <span className="text-[11px] text-slate-500 mt-1 block">
-            الخصومات الممنوحة: {formatCurrency(totalDiscounts)}
+            دخل الخدمات الفعلي خلال الفترة
           </span>
         </div>
 
-        <div className="bg-dark-900 border border-dark-800 p-5 rounded-2xl">
+        {/* Metric 2: Total Clients */}
+        <div className="bg-dark-900 border border-dark-800 p-5 rounded-3xl">
           <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span>عمولات الحلاقين المستحقة</span>
-            <Users className="w-4 h-4 text-amber-400" />
+            <span>إجمالي العملاء</span>
+            <Users className="w-4 h-4 text-sky-400" />
           </div>
-          <div className="text-2xl font-black text-amber-400 font-mono mt-2">
-            {formatCurrency(totalCommissions)}
+          <div className="text-3xl font-black text-slate-100 font-mono mt-2">
+            {report.totalClients} <span className="text-xs font-normal text-slate-400">عميل</span>
           </div>
           <span className="text-[11px] text-slate-500 mt-1 block">
-            تمثل {totalCollected > 0 ? Math.round((totalCommissions / totalCollected) * 100) : 0}% من الإيراد
+            عملية حلاقة مسجلة
           </span>
         </div>
 
-        <div className="bg-dark-900 border border-dark-800 p-5 rounded-2xl">
+        {/* Metric 3: Advances Taken vs Repaid */}
+        <div className="bg-dark-900 border border-dark-800 p-5 rounded-3xl">
           <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span>المصروفات العامة</span>
-            <ArrowDownCircle className="w-4 h-4 text-red-400" />
+            <span>السلف المسجلة من الدرج</span>
+            <HandCoins className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-2xl font-black text-red-400 font-mono mt-2">
-            {formatCurrency(totalExpenses)}
+          <div className="text-3xl font-black text-amber-400 font-mono mt-2">
+            {formatCurrency(report.totalAdvancesTaken)}
           </div>
-          <span className="text-[11px] text-slate-500 mt-1 block">
-            فواتير ومستلزمات تشغيل
-          </span>
+          <div className="text-[11px] text-slate-400 mt-1 flex justify-between">
+            <span>المسترد: {formatCurrency(report.totalAdvancesRepaid)}</span>
+            <span className="text-amber-400 font-bold">باقي: {formatCurrency(report.remainingAdvancesDebt)}</span>
+          </div>
         </div>
 
-        <div className="bg-dark-900 border border-dark-800 p-5 rounded-2xl">
+        {/* Metric 4: Net Drawer Movement */}
+        <div className="bg-dark-900 border border-dark-800 p-5 rounded-3xl">
           <div className="flex items-center justify-between text-slate-400 text-xs">
-            <span>صافي ربح الصالون التقديري</span>
-            <Coins className="w-4 h-4 text-emerald-400" />
+            <span>صافي حركة درج المحل</span>
+            <Wallet className="w-4 h-4 text-emerald-400" />
           </div>
-          <div className="text-2xl font-black text-emerald-400 font-mono mt-2">
-            {formatCurrency(estimatedShopMargin)}
+          <div className="text-3xl font-black text-emerald-400 font-mono mt-2">
+            {formatCurrency(report.drawerNetMovement)}
           </div>
-          <span className="text-[11px] text-emerald-500/80 mt-1 block">
-            بعد خصم العمولات والمصاريف
+          <span className="text-[11px] text-slate-500 mt-1 block">
+            الإيراد المحصل - السلف + السلف المستردة
           </span>
         </div>
       </div>
 
-      {/* Staff Commission Statements Breakdown */}
-      <div className="bg-dark-900 border border-dark-800 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-dark-800 bg-dark-850 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-            <Users className="w-4 h-4 text-gold-400" />
-            <span>كشف حساب واستحقاق الحلاقين خلال الفترة المحددة</span>
-          </h3>
+      {/* Strict Distinction Explanation Note */}
+      <div className="p-4 bg-dark-900 border border-dark-800 rounded-2xl text-xs text-slate-400 flex items-start gap-3">
+        <Coins className="w-5 h-5 text-gold-400 shrink-0 mt-0.5" />
+        <div>
+          <span className="font-bold text-slate-200 block mb-0.5">
+            تنبيه مالي مهم لصاحب المحل:
+          </span>
+          <p className="leading-relaxed">
+            السيستم يفرّق تماماً بين <span className="text-gold-400 font-bold">«إيراد الحلاقة»</span> و <span className="text-amber-400 font-bold">«السلف»</span>. السلفة ليست إيراداً للمحل وليست مصروفاً نهائياً، بل هي مبالغ نقدية خرجت مؤقتاً من الدرج ومستحقة الرد لاحقاً من الموظف.
+          </p>
+        </div>
+      </div>
+
+      {/* Staff Ranking & Performance Table */}
+      <div className="bg-dark-900 border border-dark-800 rounded-3xl overflow-hidden shadow-sm">
+        <div className="p-5 border-b border-dark-800 bg-dark-850 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-gold-400" />
+            <h3 className="font-bold text-slate-100 text-sm">
+              ترتيب الموظفين حسب الأداء (كل موظف حلق كام وجمع كام)
+            </h3>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
             <thead className="bg-dark-800/60 text-slate-400 font-semibold border-b border-dark-750">
               <tr>
-                <th className="p-3.5">كود الموظف</th>
-                <th className="p-3.5">اسم الحلاق</th>
-                <th className="p-3.5">عدد التذاكر</th>
-                <th className="p-3.5">قيمة الخدمات</th>
-                <th className="p-3.5">العمولة المكتسبة</th>
-                <th className="p-3.5">مديونية السلف المتبقية</th>
-                <th className="p-3.5">صافي الاستحقاق للصرف</th>
+                <th className="p-4 text-center">الترتيب</th>
+                <th className="p-4">اسم الحلاق</th>
+                <th className="p-4">عدد العملاء</th>
+                <th className="p-4">إجمالي الدخل المحصل</th>
+                <th className="p-4">السلف المأخوذة</th>
+                <th className="p-4">متبقي السلف كمديونية</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-dark-800 text-slate-200">
-              {db.employees.map(emp => {
-                const empTx = filteredTx.filter(t => t.employeeId === emp.id);
-                const count = empTx.length;
-                const value = empTx.reduce((s, t) => s + t.collectedAmount, 0);
-                const comm = empTx.reduce((s, t) => s + t.commissionSnapshot.totalCommission, 0);
-                const empAdvances = db.advanceRequests.filter(a => a.employeeId === emp.id);
-                const debt = empAdvances
-                  .filter(a => a.status === 'DISBURSED' || a.status === 'PARTIALLY_REPAID')
-                  .reduce((s, a) => s + a.remainingBalance, 0);
-
-                return (
-                  <tr key={emp.id} className="hover:bg-dark-850/50 transition">
-                    <td className="p-3.5 font-bold font-mono text-gold-400">{emp.code}</td>
-                    <td className="p-3.5 font-medium">{emp.fullName}</td>
-                    <td className="p-3.5 font-mono">{count}</td>
-                    <td className="p-3.5 font-mono">{formatCurrency(value)}</td>
-                    <td className="p-3.5 font-mono font-bold text-emerald-400">{formatCurrency(comm)}</td>
-                    <td className="p-3.5 font-mono text-amber-400">{formatCurrency(debt)}</td>
-                    <td className="p-3.5 font-mono font-bold text-slate-100">
-                      {formatCurrency(comm - debt)}
-                    </td>
-                  </tr>
-                );
-              })}
+              {report.employeeRanking.map((emp, index) => (
+                <tr key={emp.id} className="hover:bg-dark-850/50 transition">
+                  <td className="p-4 text-center font-bold font-mono">
+                    {index === 0 ? (
+                      <span className="w-6 h-6 rounded-full bg-gold-500 text-dark-950 font-bold inline-flex items-center justify-center text-xs shadow-gold-sm">
+                        1
+                      </span>
+                    ) : index === 1 ? (
+                      <span className="w-6 h-6 rounded-full bg-slate-300 text-dark-950 font-bold inline-flex items-center justify-center text-xs">
+                        2
+                      </span>
+                    ) : index === 2 ? (
+                      <span className="w-6 h-6 rounded-full bg-amber-700 text-slate-100 font-bold inline-flex items-center justify-center text-xs">
+                        3
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">{index + 1}</span>
+                    )}
+                  </td>
+                  <td className="p-4 font-bold text-sm text-slate-100">{emp.name}</td>
+                  <td className="p-4 font-bold font-mono text-slate-200">{emp.clientsCount} عميل</td>
+                  <td className="p-4 font-bold font-mono text-emerald-400 text-sm">
+                    {formatCurrency(emp.totalRevenue)}
+                  </td>
+                  <td className="p-4 font-mono text-slate-300">{formatCurrency(emp.advancesTaken)}</td>
+                  <td className="p-4 font-mono font-bold text-amber-400">
+                    {emp.advancesRemaining > 0 ? formatCurrency(emp.advancesRemaining) : 'لا توجد'}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Services Breakdown Table */}
+      <div className="bg-dark-900 border border-dark-800 rounded-3xl overflow-hidden shadow-sm">
+        <div className="p-5 border-b border-dark-800 bg-dark-850 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Scissors className="w-5 h-5 text-gold-400" />
+            <h3 className="font-bold text-slate-100 text-sm">
+              تفاصيل خدمات الحلاقة المنفذة خلال الفترة
+            </h3>
+          </div>
+        </div>
+
+        <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {Object.entries(report.serviceCounts).map(([srvName, data]) => (
+            <div
+              key={srvName}
+              className="p-4 bg-dark-850 border border-dark-750 rounded-2xl flex flex-col justify-between"
+            >
+              <h4 className="font-bold text-slate-200 text-xs">{srvName}</h4>
+              <div className="mt-3 flex items-baseline justify-between">
+                <span className="text-base font-black text-gold-400 font-mono">
+                  {data.count} <span className="text-xs font-normal text-slate-400">مرة</span>
+                </span>
+                <span className="text-xs font-bold text-emerald-400 font-mono">
+                  {formatCurrency(data.total)}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

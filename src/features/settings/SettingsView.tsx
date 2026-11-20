@@ -1,55 +1,99 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { dbStorage } from '../../lib/db/storage';
-import { auditService } from '../../services/auditService';
+import { generateId, formatCurrency } from '../../lib/utils';
+import { ServiceType } from '../../types';
 import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 import {
   Settings,
-  Database,
+  Scissors,
+  Plus,
+  Edit2,
+  Trash2,
+  Save,
   Download,
   Upload,
   RotateCcw,
-  Save,
   CheckCircle2,
-  AlertTriangle,
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
-  const { db, currentUser, refreshDb } = useApp();
+  const { db, refreshDb } = useApp();
+
+  // Shop Info
   const [shopName, setShopName] = useState(db.settings.shopName);
   const [shopSubtitle, setShopSubtitle] = useState(db.settings.shopSubtitle);
   const [phone, setPhone] = useState(db.settings.phone);
-  const [address, setAddress] = useState(db.settings.address);
-  const [receiptFooter, setReceiptFooter] = useState(db.settings.receiptFooter);
-  const [inactivityMinutes, setInactivityMinutes] = useState(String(db.settings.inactivityLockMinutes));
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const handleSaveSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUser) return;
+  // Service Edit / Add Modal
+  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
+  const [editingService, setEditingService] = useState<ServiceType | null>(null);
+  const [serviceName, setServiceName] = useState('');
+  const [servicePrice, setServicePrice] = useState('80');
 
+  const handleSaveShopInfo = (e: React.FormEvent) => {
+    e.preventDefault();
     dbStorage.updateDb(d => {
       d.settings.shopName = shopName.trim();
       d.settings.shopSubtitle = shopSubtitle.trim();
       d.settings.phone = phone.trim();
-      d.settings.address = address.trim();
-      d.settings.receiptFooter = receiptFooter.trim();
-      d.settings.inactivityLockMinutes = Number(inactivityMinutes) || 10;
     });
-
-    auditService.log(
-      currentUser.id,
-      currentUser.displayName,
-      currentUser.role,
-      'UPDATE_SHOP_SETTINGS',
-      'SETTING',
-      'shop_settings',
-      `تحديث إعدادات الصالون وهوية النظام`
-    );
-
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
     refreshDb();
+  };
+
+  const openAddService = () => {
+    setEditingService(null);
+    setServiceName('');
+    setServicePrice('80');
+    setIsServiceModalOpen(true);
+  };
+
+  const openEditService = (srv: ServiceType) => {
+    setEditingService(srv);
+    setServiceName(srv.name);
+    setServicePrice(String(srv.defaultPrice));
+    setIsServiceModalOpen(true);
+  };
+
+  const handleSaveService = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serviceName.trim()) return;
+    const priceNum = Number(servicePrice) || 0;
+
+    if (editingService) {
+      dbStorage.updateDb(d => {
+        const s = d.services.find(x => x.id === editingService.id);
+        if (s) {
+          s.name = serviceName.trim();
+          s.defaultPrice = priceNum;
+        }
+      });
+    } else {
+      const newSrv: ServiceType = {
+        id: generateId('srv'),
+        name: serviceName.trim(),
+        defaultPrice: priceNum,
+      };
+      dbStorage.updateDb(d => {
+        d.services.push(newSrv);
+      });
+    }
+
+    setIsServiceModalOpen(false);
+    refreshDb();
+  };
+
+  const handleDeleteService = (id: string) => {
+    if (confirm('هل تريد حذف هذه الخدمة من قائمة الحلاقة؟')) {
+      dbStorage.updateDb(d => {
+        d.services = d.services.filter(s => s.id !== id);
+      });
+      refreshDb();
+    }
   };
 
   const handleDownloadBackup = () => {
@@ -57,10 +101,8 @@ export const SettingsView: React.FC = () => {
     const blob = new Blob([backupJson], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
     a.href = url;
-    a.download = `MR_Barbers_Backup_${dateStr}.json`;
+    a.download = `نسخة_صالون_رمشان_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -72,10 +114,10 @@ export const SettingsView: React.FC = () => {
     const reader = new FileReader();
     reader.onload = event => {
       const content = event.target?.result as string;
-      if (confirm('تحذير: استعادة النسخة الاحتياطية ستقوم بتحديث كافة بيانات الصالون الحالية بالبيانات الموجودة في الملف. هل تود المتابعة؟')) {
+      if (confirm('تنبيه: سيتم استبدال البيانات بالملف المحمل. هل تود المتابعة؟')) {
         const res = dbStorage.restoreBackup(content);
         if (res.success) {
-          alert('تم استعادة النسخة الاحتياطية بنجاح!');
+          alert('تم استعادة البيانات بنجاح!');
           refreshDb();
         } else {
           alert(res.message);
@@ -86,134 +128,139 @@ export const SettingsView: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleFactoryReset = () => {
-    if (confirm('تنبيه هام جداً: سيتم مسح التغييرات وإعادة تهيئة النظام بالبيانات التوضيحية الافتراضية. هل أنت متأكد تماماً؟')) {
-      dbStorage.resetToFactory();
-      alert('تم إعادة ضبط النظام إلى الحالة الأولية بنجاح.');
-      refreshDb();
-    }
-  };
-
   return (
     <div className="flex-1 p-6 space-y-6 overflow-y-auto bg-dark-950 select-none">
       <div>
-        <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+        <h2 className="text-xl font-black text-slate-100 flex items-center gap-2 font-display">
           <Settings className="w-5 h-5 text-gold-400" />
-          <span>إعدادات النظام والنسخ الاحتياطي (Settings & Maintenance)</span>
+          <span>إعدادات النظام والخدمات (تحكم الأدمن)</span>
         </h2>
         <p className="text-xs text-slate-400 mt-1">
-          تخصيص هوية الصالون، نصوص الإيصالات الحرارية، وإدارة النسخ الاحتياطية المحلية
+          إدارة أنواع الحلاقة وأسعارها، بيانات الصالون، والنسخ الاحتياطي للبيانات
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Shop Profile Form (2 cols) */}
-        <div className="lg:col-span-2 bg-dark-900 border border-dark-800 rounded-2xl p-6 shadow-sm">
-          <h3 className="text-base font-bold text-slate-100 mb-4 pb-3 border-b border-dark-800">
-            بيانات وهوية الصالون الرسمية
-          </h3>
-
-          <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Left Column: Services Management (2 cols) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Service catalogue */}
+          <div className="bg-dark-900 border border-dark-800 rounded-3xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-dark-800">
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">اسم الصالون:</label>
-                <input
-                  type="text"
-                  required
-                  value={shopName}
-                  onChange={e => setShopName(e.target.value)}
-                  className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-500/50"
-                />
+                <h3 className="font-bold text-base text-slate-100 flex items-center gap-2">
+                  <Scissors className="w-4 h-4 text-gold-400" />
+                  <span>أنواع الحلاقة والأسعار الافتراضية</span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  تظهر للحلاق في قائمة تسجيل العملاء ويسجل السعر تلقائياً
+                </p>
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">الشعار والوصف الفرعي:</label>
-                <input
-                  type="text"
-                  value={shopSubtitle}
-                  onChange={e => setShopSubtitle(e.target.value)}
-                  className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-500/50"
-                />
-              </div>
+              <Button variant="gold" size="sm" onClick={openAddService}>
+                <Plus className="w-4 h-4 ml-1" />
+                إضافة نوع حلاقة
+              </Button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {db.services.map(srv => (
+                <div
+                  key={srv.id}
+                  className="p-4 bg-dark-850 border border-dark-750 rounded-2xl flex items-center justify-between"
+                >
+                  <div>
+                    <h4 className="font-bold text-slate-100 text-sm">{srv.name}</h4>
+                    <span className="font-mono font-bold text-xs text-gold-400 mt-0.5 block">
+                      {formatCurrency(srv.defaultPrice)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => openEditService(srv)}
+                      className="p-1.5 text-slate-400 hover:text-gold-400 rounded-lg bg-dark-800 hover:bg-dark-750 transition"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteService(srv.id)}
+                      className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg bg-dark-800 hover:bg-dark-750 transition"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Shop Information Form */}
+          <div className="bg-dark-900 border border-dark-800 rounded-3xl p-6 shadow-sm">
+            <h3 className="font-bold text-base text-slate-100 mb-4 pb-3 border-b border-dark-800">
+              بيانات وهوية الصالون
+            </h3>
+
+            <form onSubmit={handleSaveShopInfo} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">اسم الصالون:</label>
+                  <input
+                    type="text"
+                    required
+                    value={shopName}
+                    onChange={e => setShopName(e.target.value)}
+                    className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-500/60"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">الوصف والشعار:</label>
+                  <input
+                    type="text"
+                    value={shopSubtitle}
+                    onChange={e => setShopSubtitle(e.target.value)}
+                    className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-500/60"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">رقم الهاتف:</label>
+                <label className="block text-slate-300 font-bold mb-1">رقم هاتف الصالون:</label>
                 <input
                   type="text"
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
-                  className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 font-mono text-slate-100 focus:outline-none focus:border-gold-500/50"
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 font-mono text-slate-100 focus:outline-none focus:border-gold-500/60"
                 />
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">
-                  مدة قفل الشاشة التلقائي (بالدقائق):
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="60"
-                  value={inactivityMinutes}
-                  onChange={e => setInactivityMinutes(e.target.value)}
-                  className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 font-mono text-slate-100 focus:outline-none focus:border-gold-500/50"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1">العنوان والموقع:</label>
-              <input
-                type="text"
-                value={address}
-                onChange={e => setAddress(e.target.value)}
-                className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-500/50"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1">
-                الرسالة الترحيبية في ذيل الإيصال الحراري:
-              </label>
-              <textarea
-                rows={3}
-                value={receiptFooter}
-                onChange={e => setReceiptFooter(e.target.value)}
-                className="w-full bg-dark-800 border border-dark-750 rounded-xl p-3 text-slate-100 focus:outline-none focus:border-gold-500/50"
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-3 border-t border-dark-800">
-              {saveSuccess && (
-                <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>تم حفظ الإعدادات بنجاح</span>
-                </div>
-              )}
-              <div className="mr-auto">
-                <Button variant="gold" type="submit">
+              <div className="pt-2 flex items-center justify-between border-t border-dark-800">
+                {saveSuccess && (
+                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" />
+                    تم الحفظ بنجاح
+                  </span>
+                )}
+                <Button type="submit" variant="gold" className="mr-auto">
                   <Save className="w-4 h-4 ml-1.5" />
-                  حفظ الإعدادات
+                  حفظ البيانات
                 </Button>
               </div>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
 
-        {/* Right Column: Database Backup & Maintenance (1 col) */}
-        <div className="space-y-4">
-          <div className="bg-dark-900 border border-dark-800 rounded-2xl p-6 shadow-sm">
-            <h3 className="text-base font-bold text-slate-100 mb-2 flex items-center gap-2">
-              <Database className="w-4 h-4 text-gold-400" />
-              <span>النسخ الاحتياطي (Backup)</span>
+        {/* Right Column: Backup & Restore (1 col) */}
+        <div className="space-y-6">
+          <div className="bg-dark-900 border border-dark-800 rounded-3xl p-6 shadow-sm">
+            <h3 className="font-bold text-base text-slate-100 mb-2">
+              النسخ الاحتياطي للبيانات
             </h3>
             <p className="text-xs text-slate-400 mb-5 leading-relaxed">
-              قم بتحميل نسخة احتياطية كاملة من قاعدة بيانات الصالون واحتفظ بها على فلاش ميموري خارجي لضمان سلامة بياناتك.
+              احفظ نسخة من بيانات المحل وسجلات الحلاقة والسلف على فلاش ميموري خارجي لضمان الأمان.
             </p>
 
-            <div className="space-y-3">
+            <div className="space-y-3 text-xs">
               <Button
                 variant="outline-gold"
                 size="md"
@@ -226,7 +273,7 @@ export const SettingsView: React.FC = () => {
 
               <label className="w-full inline-flex items-center justify-center font-bold rounded-xl transition text-xs px-4 py-2.5 bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 cursor-pointer">
                 <Upload className="w-4 h-4 ml-2" />
-                <span>استعادة نسخة احتياطية من ملف</span>
+                <span>استعادة البيانات من ملف</span>
                 <input
                   type="file"
                   accept=".json"
@@ -236,23 +283,52 @@ export const SettingsView: React.FC = () => {
               </label>
             </div>
           </div>
-
-          {/* Danger Zone */}
-          <div className="bg-red-950/20 border border-red-900/40 rounded-2xl p-6">
-            <h4 className="text-xs font-bold text-red-400 flex items-center gap-2 mb-2">
-              <AlertTriangle className="w-4 h-4" />
-              <span>إعادة ضبط المصنع (Factory Reset)</span>
-            </h4>
-            <p className="text-[11px] text-slate-400 mb-4">
-              إعادة تهيئة النظام بقاعدة البيانات التوضيحية الافتراضية وحذف أي تعديلات محلية.
-            </p>
-            <Button variant="danger" size="sm" className="w-full" onClick={handleFactoryReset}>
-              <RotateCcw className="w-4 h-4 ml-1.5" />
-              إعادة ضبط المصنع
-            </Button>
-          </div>
         </div>
       </div>
+
+      {/* Add / Edit Service Modal */}
+      <Modal
+        isOpen={isServiceModalOpen}
+        onClose={() => setIsServiceModalOpen(false)}
+        title={editingService ? 'تعديل نوع الحلاقة' : 'إضافة نوع حلاقة جديد'}
+        subtitle="تحديد اسم الخدمة وسعرها الافتراضي"
+      >
+        <form onSubmit={handleSaveService} className="space-y-4 text-xs">
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">اسم نوع الحلاقة:</label>
+            <input
+              type="text"
+              required
+              value={serviceName}
+              onChange={e => setServiceName(e.target.value)}
+              placeholder="مثال: قصة شعر مميزة"
+              className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-500/60"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">السعر الافتراضي (جنيه):</label>
+            <input
+              type="number"
+              min="0"
+              step="5"
+              required
+              value={servicePrice}
+              onChange={e => setServicePrice(e.target.value)}
+              className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 font-mono text-base font-bold text-gold-300 focus:outline-none focus:border-gold-500/60"
+            />
+          </div>
+
+          <div className="pt-2 flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setIsServiceModalOpen(false)}>
+              إلغاء
+            </Button>
+            <Button type="submit" variant="gold">
+              {editingService ? 'حفظ التعديل' : 'إضافة نوع الحلاقة'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

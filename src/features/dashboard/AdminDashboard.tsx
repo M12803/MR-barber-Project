@@ -1,330 +1,433 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
-import { cashboxService } from '../../services/cashboxService';
-import { exportService } from '../../services/exportService';
-import { Badge } from '../../components/ui/Badge';
+import { reportService } from '../../services/reportService';
+import { advanceService } from '../../services/advanceService';
 import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
+import { Modal } from '../../components/ui/Modal';
+import { Employee } from '../../types';
 import {
   TrendingUp,
-  Receipt,
   Users,
-  Wallet,
-  ArrowDownCircle,
-  FileSpreadsheet,
+  HandCoins,
   Scissors,
   CheckCircle2,
-  Clock,
-  Sparkles,
   AlertCircle,
+  FileSpreadsheet,
+  ArrowRight,
+  Eye,
+  UserCheck,
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
-  const { db, setCurrentView } = useApp();
+  const { db, setCurrentView, refreshDb } = useApp();
+
+  const summary = reportService.getDashboardSummary();
+  const pendingAdvances = db.advances.filter(a => a.status === 'PENDING');
+
+  // Selected Employee Modal for full details
+  const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
+
+  // Repayment Modal
+  const [repayAdvanceId, setRepayAdvanceId] = useState<string | null>(null);
+  const [repayAmount, setRepayAmount] = useState<string>('100');
+  const [repayNote, setRepayNote] = useState<string>('سداد نقدي في الدرج');
 
   const todayStr = new Date().toISOString().slice(0, 10);
-  const todayTransactions = db.transactions.filter(
-    t => t.createdAt.startsWith(todayStr) && t.status !== 'VOIDED'
-  );
 
-  const todayGross = todayTransactions.reduce((s, t) => s + t.grossTotal, 0);
-  const todayCollected = todayTransactions.reduce((s, t) => s + t.collectedAmount, 0);
-  const todayCommissions = todayTransactions.reduce((s, t) => s + t.commissionSnapshot.totalCommission, 0);
-  const todayExpenses = db.expenses
-    .filter(e => e.date.startsWith(todayStr))
-    .reduce((s, e) => s + e.amount, 0);
+  const handleApproveAdvance = (advId: string) => {
+    advanceService.approveAdvance(advId, 'تمت الموافقة والمراجعة من المدير');
+    refreshDb();
+  };
 
-  const cashboxBalance = cashboxService.getCurrentBalance();
-  const pendingCorrections = db.correctionRequests.filter(r => r.status === 'PENDING');
-  const pendingAdvances = db.advanceRequests.filter(a => a.status === 'PENDING');
-
-  // Employee Performance today
-  const employeeCards = db.employees
-    .filter(e => e.status === 'ACTIVE')
-    .map(emp => {
-      const empTodayTx = todayTransactions.filter(t => t.employeeId === emp.id);
-      const ticketsCount = empTodayTx.length;
-      const totalValue = empTodayTx.reduce((s, t) => s + t.collectedAmount, 0);
-      const totalCommission = empTodayTx.reduce((s, t) => s + t.commissionSnapshot.totalCommission, 0);
-
-      return {
-        emp,
-        ticketsCount,
-        totalValue,
-        totalCommission,
-      };
-    });
+  const handleConfirmRepayment = () => {
+    if (!repayAdvanceId) return;
+    const amt = Number(repayAmount);
+    if (!amt || amt <= 0) return;
+    advanceService.recordRepayment(repayAdvanceId, amt, repayNote);
+    setRepayAdvanceId(null);
+    setRepayAmount('100');
+    refreshDb();
+  };
 
   return (
     <div className="flex-1 p-6 space-y-6 overflow-y-auto bg-dark-950 select-none">
-      {/* Welcome & Quick Action Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-dark-900 border border-gold-500/20 p-5 rounded-2xl shadow-gold-sm">
+      {/* Welcome Top Banner */}
+      <div className="bg-dark-900 border border-gold-500/25 p-6 rounded-3xl shadow-gold-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-black text-slate-100 font-display">
-              لوحة التحكم الشاملة | صالون محمد رمشان
+              لوحة التحكم الرئيسية | {db.settings.shopName}
             </h2>
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            ملخص الأداء المالي، تشغيل الوردية، ومتابعة كفاءة فريق العمل اليوم
+            متابعة إيرادات اليوم، عدد العملاء، السلف المسجلة، وأداء الحلاقين
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="outline-gold" size="sm" onClick={() => exportService.exportFullWorkbook()}>
+          <Button
+            variant="outline-gold"
+            size="sm"
+            onClick={() => reportService.exportToExcel('today')}
+          >
             <FileSpreadsheet className="w-4 h-4 ml-1.5" />
-            تصدير تقرير Excel
+            تصدير تقرير اليوم (Excel)
           </Button>
-          <Button variant="gold" size="sm" onClick={() => setCurrentView('pos')}>
-            <Scissors className="w-4 h-4 ml-1.5" />
-            نقطة البيع (POS)
+          <Button
+            variant="gold"
+            size="sm"
+            onClick={() => setCurrentView('reports')}
+          >
+            عرض التقارير الشاملة
           </Button>
         </div>
       </div>
 
-      {/* Alert Banners if there are pending approvals */}
-      {(pendingCorrections.length > 0 || pendingAdvances.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {pendingCorrections.length > 0 && (
-            <div className="bg-amber-950/40 border border-amber-600/40 p-4 rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-400" />
-                <div>
-                  <h4 className="text-xs font-bold text-amber-200">
-                    يوجد {pendingCorrections.length} طلب تعديل / إلغاء تذكرة معلق
-                  </h4>
-                  <p className="text-[11px] text-amber-300/80">يتطلب موافقة الإدارة وإجراء قيد عكسي</p>
-                </div>
-              </div>
-              <Button size="sm" variant="secondary" onClick={() => setCurrentView('corrections')}>
-                مراجعة
-              </Button>
+      {/* Pending Advances Alert Banner */}
+      {pendingAdvances.length > 0 && (
+        <div className="bg-amber-950/40 border border-amber-600/50 p-4 rounded-2xl flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <h4 className="text-xs font-bold text-amber-200">
+                يوجد {pendingAdvances.length} سلفة مسجلة جديدة بانتظار مراجعتك
+              </h4>
+              <p className="text-[11px] text-amber-300/80">
+                سحبها الموظف من الدرج وتحتاج اعتمادك
+              </p>
             </div>
-          )}
-
-          {pendingAdvances.length > 0 && (
-            <div className="bg-sky-950/40 border border-sky-600/40 p-4 rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-sky-400" />
-                <div>
-                  <h4 className="text-xs font-bold text-sky-200">
-                    يوجد {pendingAdvances.length} طلب سلفة بانتظار الاعتماد
-                  </h4>
-                  <p className="text-[11px] text-sky-300/80">مقدمة من موظفي الصالون</p>
-                </div>
-              </div>
-              <Button size="sm" variant="secondary" onClick={() => setCurrentView('advances')}>
-                مراجعة السلف
-              </Button>
-            </div>
-          )}
+          </div>
+          <Button
+            size="sm"
+            variant="gold"
+            onClick={() => setCurrentView('operations')}
+          >
+            مراجعة السلف فوراً
+          </Button>
         </div>
       )}
 
-      {/* Top KPI Cards */}
+      {/* 4 Essential Metrics Cards (Section 4 in Spec) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Revenue */}
-        <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-4 rounded-2xl transition duration-300 shadow-sm">
+        {/* Metric 1: Today Revenue */}
+        <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-5 rounded-3xl transition duration-300 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-medium">إيرادات اليوم (المحصل)</span>
-            <div className="w-9 h-9 rounded-xl bg-gold-500/15 text-gold-400 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
+            <span className="text-xs text-slate-400 font-medium">إيراد الخدمات اليوم</span>
+            <div className="w-10 h-10 rounded-2xl bg-gold-500/15 text-gold-400 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-2xl font-black text-gold-400 font-mono">
-              {formatCurrency(todayCollected)}
+            <span className="text-3xl font-black text-gold-400 font-mono">
+              {formatCurrency(summary.todayRevenue)}
             </span>
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1">
-              <span>الإجمالي قبل الخصومات: {formatCurrency(todayGross)}</span>
-            </div>
+            <span className="text-[11px] text-slate-500 block mt-1">
+              إجمالي المحصل من الحلاقة اليوم
+            </span>
           </div>
         </div>
 
-        {/* KPI 2: Completed Tickets */}
-        <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-4 rounded-2xl transition duration-300 shadow-sm">
+        {/* Metric 2: Today Clients */}
+        <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-5 rounded-3xl transition duration-300 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-medium">عدد التذاكر والعملاء اليوم</span>
-            <div className="w-9 h-9 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center">
-              <Receipt className="w-4 h-4" />
+            <span className="text-xs text-slate-400 font-medium">عدد العملاء</span>
+            <div className="w-10 h-10 rounded-2xl bg-sky-500/15 text-sky-400 flex items-center justify-center">
+              <Users className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-2xl font-black text-slate-100 font-mono">
-              {todayTransactions.length} <span className="text-sm font-normal text-slate-400">تذكرة</span>
+            <span className="text-3xl font-black text-slate-100 font-mono">
+              {summary.todayClients}
             </span>
-            <div className="flex items-center gap-1 text-[11px] text-emerald-400 mt-1">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>معدل النشاط نشط ومستقر</span>
-            </div>
+            <span className="text-[11px] text-slate-500 block mt-1">
+              عميل تمت حلاقتهم اليوم
+            </span>
           </div>
         </div>
 
-        {/* KPI 3: Commissions */}
-        <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-4 rounded-2xl transition duration-300 shadow-sm">
+        {/* Metric 3: Today Advances */}
+        <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-5 rounded-3xl transition duration-300 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-medium">عمولات الحلاقين اليوم</span>
-            <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center">
-              <Users className="w-4 h-4" />
+            <span className="text-xs text-slate-400 font-medium">السلف المسجلة</span>
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center">
+              <HandCoins className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-2xl font-black text-amber-400 font-mono">
-              {formatCurrency(todayCommissions)}
+            <span className="text-3xl font-black text-amber-400 font-mono">
+              {formatCurrency(summary.todayAdvances)}
             </span>
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1">
-              <span>صافي الصالون التقديري: {formatCurrency(todayCollected - todayCommissions)}</span>
-            </div>
+            <span className="text-[11px] text-slate-500 block mt-1">
+              فلوس خرجت من الدرج اليوم
+            </span>
           </div>
         </div>
 
-        {/* KPI 4: Cashbox Balance */}
-        <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-4 rounded-2xl transition duration-300 shadow-sm">
+        {/* Metric 4: Active Employees */}
+        <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-5 rounded-3xl transition duration-300 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-medium">رصيد الخزينة (درج الكاش)</span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
-              <Wallet className="w-4 h-4" />
+            <span className="text-xs text-slate-400 font-medium">الموظفون</span>
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+              <Scissors className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-2xl font-black text-emerald-400 font-mono">
-              {formatCurrency(cashboxBalance)}
+            <span className="text-3xl font-black text-emerald-400 font-mono">
+              {summary.activeEmployees}
             </span>
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1">
-              <span>مصروفات اليوم: {formatCurrency(todayExpenses)}</span>
-            </div>
+            <span className="text-[11px] text-slate-500 block mt-1">
+              حلاقين نشطين في المحل
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Staff Cards Grid (Section 5.2 FR-ADM-02) */}
+      {/* Employee Cards Section (إدارة الموظفين) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <Users className="w-4 h-4 text-gold-400" />
-            <span>بطاقات أداء الحلاقين اليوم</span>
-          </h3>
+          <div>
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Users className="w-4 h-4 text-gold-400" />
+              <span>إدارة الموظفين (كروت الحلاقين اليوم)</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              اضغط على أي موظف لفتح حسابه ومتابعة تفاصيل تذاكره وسلفه
+            </p>
+          </div>
+
           <Button variant="ghost" size="sm" onClick={() => setCurrentView('employees')}>
-            عرض تفاصيل الحسابات
+            إدارة حسابات الفريق
           </Button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {employeeCards.map(({ emp, ticketsCount, totalValue, totalCommission }) => (
-            <div
-              key={emp.id}
-              className="bg-dark-900 border border-dark-800 hover:border-gold-500/30 p-4 rounded-2xl transition flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center text-gold-400 font-bold">
-                    {emp.fullName.charAt(0)}
-                  </div>
-                  <Badge variant="gold">{emp.code}</Badge>
-                </div>
-                <h4 className="font-bold text-sm text-slate-100">{emp.fullName}</h4>
-                <p className="text-xs text-slate-400 mt-0.5">{emp.roleTitle}</p>
-                <div className="mt-2 text-[11px] text-slate-500">
-                  <span>نظام الحساب: </span>
-                  <span className="text-slate-300 font-medium">
-                    {emp.compensationRule.type === 'PERCENTAGE'
-                      ? `نسبة ${emp.compensationRule.rateOrAmount}%`
-                      : emp.compensationRule.type === 'FIXED_PER_SERVICE'
-                      ? `${emp.compensationRule.rateOrAmount} ج.م / خدمة`
-                      : 'راتب شهري'}
-                  </span>
-                </div>
-              </div>
+          {db.employees.map(emp => {
+            const empTodayOps = db.operations.filter(
+              o => o.employeeId === emp.id && o.createdAt.startsWith(todayStr)
+            );
+            const clientsCount = empTodayOps.length;
+            const totalRevenue = empTodayOps.reduce((sum, o) => sum + o.amount, 0);
 
-              <div className="mt-4 pt-3 border-t border-dark-800 space-y-1.5 text-xs">
-                <div className="flex justify-between text-slate-400">
-                  <span>تذاكر اليوم:</span>
-                  <span className="font-bold text-slate-200 font-mono">{ticketsCount}</span>
+            const empAdvs = db.advances.filter(a => a.employeeId === emp.id);
+            const remainingDebt = empAdvs.reduce((sum, a) => sum + a.remainingAmount, 0);
+
+            return (
+              <button
+                key={emp.id}
+                onClick={() => setSelectedEmp(emp)}
+                className="bg-dark-900 border border-dark-800 hover:border-gold-500/50 p-5 rounded-3xl transition-all duration-200 text-right flex flex-col justify-between group hover:shadow-gold-sm"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-12 h-12 rounded-2xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center text-gold-400 font-bold text-lg font-display group-hover:scale-105 transition">
+                      {emp.name.charAt(0)}
+                    </div>
+                    <Badge variant={emp.isActive ? 'success' : 'neutral'}>
+                      {emp.isActive ? 'نشط' : 'معطل'}
+                    </Badge>
+                  </div>
+
+                  <h4 className="font-bold text-base text-slate-100 group-hover:text-gold-300 transition">
+                    {emp.name}
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">حلاق بالصالون</p>
                 </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>قيمة الخدمات:</span>
-                  <span className="font-bold text-slate-200 font-mono">
-                    {formatCurrency(totalValue)}
-                  </span>
+
+                <div className="mt-4 pt-3 border-t border-dark-800/80 space-y-2 text-xs w-full">
+                  <div className="flex justify-between text-slate-400">
+                    <span>العملاء اليوم:</span>
+                    <span className="font-bold text-slate-100 font-mono">
+                      {clientsCount} عميل
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>إجمالي الحلاقة:</span>
+                    <span className="font-bold text-gold-400 font-mono">
+                      {formatCurrency(totalRevenue)}
+                    </span>
+                  </div>
+                  {remainingDebt > 0 && (
+                    <div className="flex justify-between text-amber-400 pt-1 border-t border-dark-800/50">
+                      <span>سلف مستحقة:</span>
+                      <span className="font-mono font-bold">
+                        {formatCurrency(remainingDebt)}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <div className="flex justify-between text-gold-400 font-semibold pt-1 border-t border-dark-800/60">
-                  <span>العمولة المستحقة:</span>
-                  <span className="font-mono">{formatCurrency(totalCommission)}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Selected Employee Detailed Modal */}
+      {selectedEmp && (
+        <Modal
+          isOpen={Boolean(selectedEmp)}
+          onClose={() => setSelectedEmp(null)}
+          title={`كشف حساب الموظف: ${selectedEmp.name}`}
+          subtitle="جميع تذاكر الحلاقة والسلف المسجلة الخاصة به"
+          maxWidth="2xl"
+        >
+          <div className="space-y-5 text-xs">
+            {/* Quick Metrics */}
+            {(() => {
+              const ops = db.operations.filter(o => o.employeeId === selectedEmp.id);
+              const totalMoney = ops.reduce((s, o) => s + o.amount, 0);
+              const advs = db.advances.filter(a => a.employeeId === selectedEmp.id);
+              const totalAdv = advs.reduce((s, a) => s + a.amount, 0);
+              const remAdv = advs.reduce((s, a) => s + a.remainingAmount, 0);
+
+              return (
+                <div className="grid grid-cols-3 gap-3 p-4 bg-dark-800 rounded-2xl border border-dark-750">
+                  <div>
+                    <span className="text-slate-400 block mb-1">إجمالي العملاء:</span>
+                    <span className="text-xl font-bold font-mono text-slate-100">{ops.length} عميل</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block mb-1">إجمالي الحلاقة:</span>
+                    <span className="text-xl font-bold font-mono text-gold-400">{formatCurrency(totalMoney)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block mb-1">متبقي السلف:</span>
+                    <span className="text-xl font-bold font-mono text-amber-400">{formatCurrency(remAdv)}</span>
+                  </div>
                 </div>
+              );
+            })()}
+
+            {/* Operations list */}
+            <div>
+              <h4 className="font-bold text-slate-200 text-sm mb-2">آخر عمليات الحلاقة المنفذة:</h4>
+              <div className="max-h-48 overflow-y-auto border border-dark-750 rounded-2xl overflow-hidden">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-dark-800 text-slate-400 p-2">
+                    <tr>
+                      <th className="p-3">رقم العملية</th>
+                      <th className="p-3">الخدمة</th>
+                      <th className="p-3">المبلغ</th>
+                      <th className="p-3">التاريخ والوقت</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-dark-800 text-slate-300">
+                    {db.operations
+                      .filter(o => o.employeeId === selectedEmp.id)
+                      .slice(0, 10)
+                      .map(o => (
+                        <tr key={o.id}>
+                          <td className="p-3 font-mono font-bold text-gold-400">{o.operationNumber}</td>
+                          <td className="p-3 font-semibold text-slate-100">{o.serviceName}</td>
+                          <td className="p-3 font-mono font-bold text-emerald-400">{formatCurrency(o.amount)}</td>
+                          <td className="p-3 font-mono text-slate-400">{formatDateTime(o.createdAt)}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Recent Transactions Table */}
-      <div className="bg-dark-900 border border-dark-800 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-dark-800 flex items-center justify-between bg-dark-850">
-          <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-gold-400" />
-            <span>آخر العمليات والتذاكر المسجلة</span>
-          </h3>
-          <Button variant="ghost" size="sm" onClick={() => setCurrentView('transactions')}>
-            عرض جميع العمليات
-          </Button>
-        </div>
+            {/* Advances list */}
+            <div>
+              <h4 className="font-bold text-slate-200 text-sm mb-2">السلف المسجلة:</h4>
+              <div className="max-h-40 overflow-y-auto border border-dark-750 rounded-2xl overflow-hidden">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-dark-800 text-slate-400 p-2">
+                    <tr>
+                      <th className="p-3">الكود</th>
+                      <th className="p-3">المبلغ</th>
+                      <th className="p-3">السبب</th>
+                      <th className="p-3">المتبقي</th>
+                      <th className="p-3">الحالة</th>
+                      <th className="p-3 text-center">إجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-dark-800 text-slate-300">
+                    {db.advances
+                      .filter(a => a.employeeId === selectedEmp.id)
+                      .map(a => (
+                        <tr key={a.id}>
+                          <td className="p-3 font-mono font-bold text-gold-400">{a.advanceNumber}</td>
+                          <td className="p-3 font-mono font-bold text-amber-400">{formatCurrency(a.amount)}</td>
+                          <td className="p-3">{a.reason}</td>
+                          <td className="p-3 font-mono text-slate-200">{formatCurrency(a.remainingAmount)}</td>
+                          <td className="p-3">
+                            <Badge variant={a.status === 'REPAID' ? 'success' : 'warning'}>
+                              {a.status === 'PENDING' ? 'بانتظار المراجعة' : a.status === 'APPROVED' ? 'معتمدة' : 'مسددة'}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-center">
+                            {a.remainingAmount > 0 && (
+                              <Button
+                                size="sm"
+                                variant="outline-gold"
+                                onClick={() => {
+                                  setRepayAdvanceId(a.id);
+                                  setRepayAmount(String(a.remainingAmount));
+                                }}
+                              >
+                                تسجيل سداد
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-xs">
-            <thead className="bg-dark-800/60 text-slate-400 font-semibold border-b border-dark-750">
-              <tr>
-                <th className="p-3.5">رقم التذكرة</th>
-                <th className="p-3.5">الوقت</th>
-                <th className="p-3.5">الحلاق</th>
-                <th className="p-3.5">العميل</th>
-                <th className="p-3.5">الخدمات</th>
-                <th className="p-3.5">المبلغ المحصل</th>
-                <th className="p-3.5">الدفع</th>
-                <th className="p-3.5">الحالة</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-dark-800 text-slate-200">
-              {db.transactions.slice(0, 6).map(tx => (
-                <tr key={tx.id} className="hover:bg-dark-850/50 transition">
-                  <td className="p-3.5 font-bold font-mono text-gold-400">{tx.ticketNumber}</td>
-                  <td className="p-3.5 text-slate-400 font-mono">{formatDateTime(tx.createdAt)}</td>
-                  <td className="p-3.5 font-medium">{tx.employeeName}</td>
-                  <td className="p-3.5 text-slate-400">{tx.customerName || '-'}</td>
-                  <td className="p-3.5 max-w-[200px] truncate">
-                    {tx.items.map(i => i.serviceName).join(' + ')}
-                  </td>
-                  <td className="p-3.5 font-bold font-mono text-slate-100">
-                    {formatCurrency(tx.collectedAmount)}
-                  </td>
-                  <td className="p-3.5">
-                    <span className="px-2 py-0.5 rounded-lg bg-dark-800 text-[11px] font-mono border border-dark-700">
-                      {tx.paymentMethod}
-                    </span>
-                  </td>
-                  <td className="p-3.5">
-                    <Badge
-                      variant={
-                        tx.status === 'COMPLETED'
-                          ? 'success'
-                          : tx.status === 'VOIDED'
-                          ? 'danger'
-                          : 'warning'
-                      }
-                    >
-                      {tx.status === 'COMPLETED'
-                        ? 'مكتمل'
-                        : tx.status === 'VOIDED'
-                        ? 'ملغي'
-                        : 'طلب تعديل'}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            <div className="flex justify-end pt-2">
+              <Button variant="secondary" onClick={() => setSelectedEmp(null)}>
+                إغلاق
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Repayment Modal */}
+      {repayAdvanceId && (
+        <Modal
+          isOpen={Boolean(repayAdvanceId)}
+          onClose={() => setRepayAdvanceId(null)}
+          title="تسجيل رد / سداد سلفة في الدرج"
+          subtitle="إعادة المبلغ إلى درج المحل وتسوية مديونية الموظف"
+        >
+          <div className="space-y-4 text-xs">
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">المبلغ المردود (جنيه):</label>
+              <input
+                type="number"
+                min="1"
+                value={repayAmount}
+                onChange={e => setRepayAmount(e.target.value)}
+                className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 font-mono text-slate-100 focus:outline-none focus:border-gold-500/60"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">ملاحظة:</label>
+              <input
+                type="text"
+                value={repayNote}
+                onChange={e => setRepayNote(e.target.value)}
+                className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-gold-500/60"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" onClick={() => setRepayAdvanceId(null)}>
+                إلغاء
+              </Button>
+              <Button variant="gold" onClick={handleConfirmRepayment}>
+                تأكيد رد المبلغ للدرج
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

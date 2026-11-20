@@ -1,475 +1,540 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { formatCurrency, formatDateTime, soundFx } from '../../lib/utils';
-import { cashboxService } from '../../services/cashboxService';
+import { operationService } from '../../services/operationService';
 import { advanceService } from '../../services/advanceService';
-import { transactionService } from '../../services/transactionService';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import {
   Scissors,
   HandCoins,
-  Clock,
+  Users,
+  Wallet,
   CheckCircle2,
+  Clock,
+  Sparkles,
+  Receipt,
   AlertCircle,
-  FileEdit,
-  TrendingUp,
 } from 'lucide-react';
 
 export const EmployeeHome: React.FC = () => {
-  const { currentUser, db, setCurrentView, refreshDb } = useApp();
+  const { currentUser, db, refreshDb } = useApp();
 
-  const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState<boolean>(false);
-  const [advanceAmount, setAdvanceAmount] = useState<string>('');
-  const [advanceReason, setAdvanceReason] = useState<string>('');
+  // Modals state
+  const [isNewClientOpen, setIsNewClientOpen] = useState(false);
+  const [isAdvanceOpen, setIsAdvanceOpen] = useState(false);
 
-  const [isShiftModalOpen, setIsShiftModalOpen] = useState<boolean>(false);
-  const [openingCash, setOpeningCash] = useState<string>('500');
-  const [shiftNotes, setShiftNotes] = useState<string>('');
+  // New Client Form
+  const [selectedServiceId, setSelectedServiceId] = useState(db.services[0]?.id || '');
+  const [serviceAmount, setServiceAmount] = useState(String(db.services[0]?.defaultPrice || 80));
+  const [clientNotes, setClientNotes] = useState('');
 
-  const [isEndShiftModalOpen, setIsEndShiftModalOpen] = useState<boolean>(false);
-  const [declaredCash, setDeclaredCash] = useState<string>('');
+  // Advance Form
+  const [advanceAmount, setAdvanceAmount] = useState('200');
+  const [advanceReason, setAdvanceReason] = useState('ظرف شخصي');
 
-  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState<boolean>(false);
-  const [selectedTxId, setSelectedTxId] = useState<string>('');
-  const [correctionReason, setCorrectionReason] = useState<string>('');
+  // Active view tab in employee page: operations or advances
+  const [activeTab, setActiveTab] = useState<'operations' | 'advances'>('operations');
 
-  const employeeId = currentUser?.employeeId || '';
-  const employeeProfile = db.employees.find(e => e.id === employeeId);
+  const employee = db.employees.find(e => e.id === currentUser?.employeeId);
+  const employeeId = employee?.id || currentUser?.employeeId || '';
+  const employeeName = employee?.name || currentUser?.displayName || 'الموظف';
 
   // Today's stats for this employee
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const myTodayTx = db.transactions.filter(
-    t => t.employeeId === employeeId && t.createdAt.startsWith(todayStr) && t.status !== 'VOIDED'
-  );
+  const todayOps = operationService.getTodayByEmployee(employeeId);
+  const todayClientsCount = todayOps.length;
+  const todayTotalRevenue = todayOps.reduce((sum, op) => sum + op.amount, 0);
 
-  const myTicketsCount = myTodayTx.length;
-  const myTodayCollected = myTodayTx.reduce((s, t) => s + t.collectedAmount, 0);
-  const myTodayCommission = myTodayTx.reduce((s, t) => s + t.commissionSnapshot.totalCommission, 0);
+  // Advances for this employee
+  const myAdvances = advanceService.getByEmployee(employeeId);
+  const totalAdvancesTaken = myAdvances.reduce((sum, a) => sum + a.amount, 0);
+  const remainingAdvancesDebt = myAdvances.reduce((sum, a) => sum + a.remainingAmount, 0);
 
-  // Advances balance
-  const myAdvances = db.advanceRequests.filter(a => a.employeeId === employeeId);
-  const myOutstandingDebt = myAdvances
-    .filter(a => a.status === 'DISBURSED' || a.status === 'PARTIALLY_REPAID')
-    .reduce((s, a) => s + a.remainingBalance, 0);
+  // Handle service change to auto-fill default price
+  const handleServiceChange = (srvId: string) => {
+    setSelectedServiceId(srvId);
+    const srv = db.services.find(s => s.id === srvId);
+    if (srv) {
+      setServiceAmount(String(srv.defaultPrice));
+    }
+  };
 
-  // Active Shift
-  const activeShift = cashboxService.getActiveShift(employeeId);
-
-  const handleRequestAdvance = (e: React.FormEvent) => {
+  // Submit New Client Operation
+  const handleSaveClient = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || !employeeId) return;
-    const amount = Number(advanceAmount);
-    if (!amount || amount <= 0) {
-      alert('يرجى إدخال مبلغ صحيح للسلفة');
+    const srv = db.services.find(s => s.id === selectedServiceId);
+    const serviceName = srv ? srv.name : 'حلاقة';
+    const amountNum = Number(serviceAmount);
+
+    if (!amountNum || amountNum <= 0) {
+      alert('يرجى تحديد المبلغ');
       return;
     }
-    if (!advanceReason.trim()) {
-      alert('يرجى توضيح سبب طلب السلفة');
+
+    operationService.addOperation(employeeId, serviceName, amountNum, clientNotes);
+    soundFx.playSuccess();
+    soundFx.playCash();
+
+    setIsNewClientOpen(false);
+    setClientNotes('');
+    refreshDb();
+  };
+
+  // Submit Advance Request
+  const handleSaveAdvance = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountNum = Number(advanceAmount);
+
+    if (!amountNum || amountNum <= 0) {
+      alert('يرجى تحديد مبلغ السلفة');
       return;
     }
 
-    advanceService.requestAdvance(employeeId, amount, advanceReason.trim(), currentUser);
+    advanceService.recordAdvance(employeeId, amountNum, advanceReason);
     soundFx.playSuccess();
-    alert('تم إرسال طلب السلفة إلى الإدارة بنجاح وفي انتظار المراجعة');
-    setIsAdvanceModalOpen(false);
-    setAdvanceAmount('');
-    setAdvanceReason('');
-    refreshDb();
-  };
 
-  const handleStartShift = () => {
-    if (!employeeProfile) return;
-    cashboxService.startShift(
-      employeeProfile.id,
-      employeeProfile.fullName,
-      Number(openingCash) || 0,
-      shiftNotes
-    );
-    soundFx.playSuccess();
-    setIsShiftModalOpen(false);
-    refreshDb();
-  };
-
-  const handleEndShift = () => {
-    if (!activeShift || !currentUser) return;
-    cashboxService.endShift(activeShift.id, Number(declaredCash) || 0, currentUser, shiftNotes);
-    soundFx.playSuccess();
-    setIsEndShiftModalOpen(false);
-    refreshDb();
-  };
-
-  const handleSubmitCorrection = () => {
-    if (!selectedTxId || !correctionReason.trim() || !currentUser) return;
-    transactionService.submitCorrectionRequest(selectedTxId, correctionReason.trim(), currentUser);
-    soundFx.playSuccess();
-    alert('تم رفع طلب التعديل إلى الإدارة للمراجعة');
-    setIsCorrectionModalOpen(false);
-    setSelectedTxId('');
-    setCorrectionReason('');
+    setIsAdvanceOpen(false);
+    setAdvanceReason('ظرف شخصي');
     refreshDb();
   };
 
   return (
-    <div className="flex-1 p-6 space-y-6 overflow-y-auto bg-dark-950 select-none">
-      {/* Header Profile Greeting */}
-      <div className="bg-dark-900 border border-gold-500/20 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="flex-1 p-6 space-y-6 overflow-y-auto bg-dark-950 select-none max-w-5xl mx-auto w-full">
+      {/* 1. Header Greeting Card */}
+      <div className="bg-dark-900 border border-gold-500/25 p-6 rounded-3xl shadow-gold-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gold-500/20 border border-gold-500/40 text-gold-400 font-bold text-2xl flex items-center justify-center font-display">
-            {employeeProfile?.fullName.charAt(0) || 'ح'}
+          <div className="w-16 h-16 rounded-2xl bg-gold-500/15 border border-gold-500/40 text-gold-400 font-extrabold text-2xl flex items-center justify-center font-display shadow-inner">
+            {employeeName.charAt(0)}
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-slate-100 font-display">
-                مرحباً، {employeeProfile?.fullName || currentUser?.displayName}
-              </h2>
-              <Badge variant="gold">{employeeProfile?.roleTitle || 'حلاق معتمد'}</Badge>
+            <span className="text-xs text-gold-400/90 font-bold block mb-1">
+              أهلاً بيك
+            </span>
+            <h2 className="text-2xl font-black text-slate-100 font-display">
+              {employeeName}
+            </h2>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="gold">موظف</Badge>
+              <span className="text-xs text-slate-400">
+                صالون محمد رمشان للرجال
+              </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
-              نظام الاستحقاق: {employeeProfile?.compensationRule.type === 'PERCENTAGE'
-                ? `نسبة مئوية (${employeeProfile.compensationRule.rateOrAmount}%) من إيراد الخدمات`
-                : 'مبلغ محدد لكل خدمة'}
-            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button variant="outline-gold" size="sm" onClick={() => setIsAdvanceModalOpen(true)}>
-            <HandCoins className="w-4 h-4 ml-1.5" />
-            طلب سلفة جديدة
-          </Button>
-          <Button variant="gold" size="sm" onClick={() => setCurrentView('pos')}>
-            <Scissors className="w-4 h-4 ml-1.5" />
-            نقطة البيع (تسجيل عميل)
-          </Button>
-        </div>
-      </div>
-
-      {/* KPI Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Stat 1: Today Tickets */}
-        <div className="bg-dark-900 border border-dark-800 p-4 rounded-2xl">
-          <span className="text-xs text-slate-400 font-medium">تذاكري المنجزة اليوم</span>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-slate-100 font-mono">{myTicketsCount}</span>
-            <span className="text-xs text-slate-500">عميل</span>
-          </div>
-        </div>
-
-        {/* Stat 2: Today Service Value */}
-        <div className="bg-dark-900 border border-dark-800 p-4 rounded-2xl">
-          <span className="text-xs text-slate-400 font-medium">قيمة خدماتي المنفذة</span>
-          <div className="mt-2">
-            <span className="text-2xl font-black text-gold-400 font-mono">
-              {formatCurrency(myTodayCollected)}
-            </span>
-          </div>
-        </div>
-
-        {/* Stat 3: Today Commission */}
-        <div className="bg-dark-900 border border-dark-800 p-4 rounded-2xl">
-          <span className="text-xs text-slate-400 font-medium">عمولتي المكتسبة اليوم</span>
-          <div className="mt-2">
-            <span className="text-2xl font-black text-emerald-400 font-mono">
-              {formatCurrency(myTodayCommission)}
-            </span>
-          </div>
-        </div>
-
-        {/* Stat 4: Remaining Advance Debt */}
-        <div className="bg-dark-900 border border-dark-800 p-4 rounded-2xl">
-          <span className="text-xs text-slate-400 font-medium">مديونية السلف الحالية</span>
-          <div className="mt-2">
-            <span className={`text-2xl font-black font-mono ${myOutstandingDebt > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
-              {formatCurrency(myOutstandingDebt)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Shift Attendance Management Card */}
-      <div className="bg-dark-900 border border-dark-800 p-5 rounded-2xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${activeShift ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-              <Clock className="w-5 h-5" />
-            </div>
+        {/* Quick Outstanding Debt Info if any */}
+        {remainingAdvancesDebt > 0 && (
+          <div className="bg-dark-850 border border-amber-500/30 px-4 py-2.5 rounded-2xl flex items-center gap-3">
+            <HandCoins className="w-5 h-5 text-amber-400" />
             <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-bold text-sm text-slate-100">حالة الوردية الحالية</h4>
-                <Badge variant={activeShift ? 'success' : 'neutral'}>
-                  {activeShift ? 'وردية مفتوحة ونشطة' : 'لا توجد وردية مفتوحة'}
-                </Badge>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {activeShift
-                  ? `بدأت الوردية في: ${formatDateTime(activeShift.startTime)} | عهدة فكة البداية: ${formatCurrency(activeShift.openingCash)}`
-                  : 'يمكنك فتح الوردية عند بدء يوم العمل لتسجيل عهدة الفكة'}
-              </p>
+              <span className="text-[11px] text-slate-400 block">سلف مسجلة مستحقة عليك:</span>
+              <span className="text-sm font-bold text-amber-400 font-mono">
+                {formatCurrency(remainingAdvancesDebt)}
+              </span>
             </div>
           </div>
+        )}
+      </div>
 
+      {/* 2. Today's Two Key Numbers (عملاء النهارده + إجمالي شغله) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Card 1: Clients Today */}
+        <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-6 rounded-3xl transition duration-300 shadow-sm flex items-center justify-between">
           <div>
-            {activeShift ? (
-              <Button variant="danger" size="sm" onClick={() => setIsEndShiftModalOpen(true)}>
-                إغلاق الوردية وتوريد الكاش
-              </Button>
-            ) : (
-              <Button variant="outline-gold" size="sm" onClick={() => setIsShiftModalOpen(true)}>
-                فتح الوردية الآن
-              </Button>
-            )}
+            <span className="text-sm font-medium text-slate-400 block mb-2">
+              عملاء النهارده
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-black text-slate-100 font-mono">
+                {todayClientsCount}
+              </span>
+              <span className="text-sm font-semibold text-gold-400">عميل</span>
+            </div>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-sky-500/15 text-sky-400 flex items-center justify-center">
+            <Users className="w-7 h-7" />
+          </div>
+        </div>
+
+        {/* Card 2: Today's Total Work */}
+        <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-6 rounded-3xl transition duration-300 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-sm font-medium text-slate-400 block mb-2">
+              إجمالي شغله النهارده
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-black text-gold-400 font-mono">
+                {formatCurrency(todayTotalRevenue)}
+              </span>
+            </div>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-gold-500/15 text-gold-400 flex items-center justify-center">
+            <Wallet className="w-7 h-7" />
           </div>
         </div>
       </div>
 
-      {/* Today's Transactions & Correction Request Option */}
-      <div className="bg-dark-900 border border-dark-800 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-dark-800 flex items-center justify-between bg-dark-850">
-          <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-            <Scissors className="w-4 h-4 text-gold-400" />
-            <span>تذاكري المسجلة اليوم (للاطلاع فقط)</span>
-          </h3>
-          <span className="text-xs text-slate-400">
-            * لا يمكن تعديل أو حذف التذكرة بعد الحفظ، يرجى تقديم طلب تصحيح للإدارة
+      {/* 3. The Two Big Main Action Buttons */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Button 1: Record New Client */}
+        <button
+          onClick={() => {
+            soundFx.playClick();
+            setIsNewClientOpen(true);
+          }}
+          className="group relative p-6 rounded-3xl bg-gold-gradient text-dark-950 font-bold shadow-gold-md hover:shadow-gold-lg hover:brightness-105 transition-all duration-200 active:scale-95 flex flex-col justify-between text-right border border-gold-300/40 min-h-[140px]"
+        >
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xl font-black font-display">
+              ✂️ تسجيل عميل جديد
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-dark-950/20 flex items-center justify-center group-hover:scale-110 transition">
+              <Scissors className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-xs text-dark-900/80 font-medium mt-3">
+            سجل الحلاقة والمبلغ اللي أخدته من العميل فوراً
+          </p>
+        </button>
+
+        {/* Button 2: Record Advance */}
+        <button
+          onClick={() => {
+            soundFx.playClick();
+            setIsAdvanceOpen(true);
+          }}
+          className="group relative p-6 rounded-3xl bg-dark-900 hover:bg-dark-850 text-slate-100 font-bold border border-gold-500/30 hover:border-gold-400 shadow-sm hover:shadow-gold-sm transition-all duration-200 active:scale-95 flex flex-col justify-between text-right min-h-[140px]"
+        >
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xl font-black font-display text-gold-400">
+              💵 تسجيل سلفة
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-gold-500/15 text-gold-400 flex items-center justify-center group-hover:scale-110 transition">
+              <HandCoins className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 font-normal mt-3">
+            سجل المبلغ اللي أخدته من درج المحل لحفظ الحسابات
+          </p>
+        </button>
+      </div>
+
+      {/* 4. Tabbed History (تسجيلاتي اليوم + سلفي المسجلة) */}
+      <div className="bg-dark-900 border border-dark-800 rounded-3xl overflow-hidden shadow-sm">
+        {/* Tab Headers */}
+        <div className="p-4 border-b border-dark-800 bg-dark-850 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('operations')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                activeTab === 'operations'
+                  ? 'bg-gold-500 text-dark-950 shadow-gold-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              تسجيلاتي اليوم ({todayOps.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('advances')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                activeTab === 'advances'
+                  ? 'bg-gold-500 text-dark-950 shadow-gold-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              سلفي المسجلة ({myAdvances.length})
+            </button>
+          </div>
+
+          <span className="text-[11px] text-slate-500 hidden sm:block">
+            * السجلات للقراءة فقط ولا يمكن تعديلها إلا بواسطة الأدمن
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-xs">
-            <thead className="bg-dark-800/60 text-slate-400 font-semibold border-b border-dark-750">
-              <tr>
-                <th className="p-3.5">رقم التذكرة</th>
-                <th className="p-3.5">الوقت</th>
-                <th className="p-3.5">الخدمات المنفذة</th>
-                <th className="p-3.5">المبلغ</th>
-                <th className="p-3.5">عمولتي</th>
-                <th className="p-3.5">طريقة الدفع</th>
-                <th className="p-3.5">الحالة</th>
-                <th className="p-3.5 text-center">إجراء</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-dark-800 text-slate-200">
-              {myTodayTx.length === 0 ? (
+        {/* Tab Content: Operations */}
+        {activeTab === 'operations' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs">
+              <thead className="bg-dark-800/60 text-slate-400 font-semibold border-b border-dark-750">
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
-                    لم تقم بتسجيل أي تذاكر بعد اليوم. اضغط على نقطة البيع للبدء.
-                  </td>
+                  <th className="p-4">رقم العملية</th>
+                  <th className="p-4">نوع الحلاقة</th>
+                  <th className="p-4">المبلغ المستلم</th>
+                  <th className="p-4">الوقت</th>
+                  <th className="p-4">ملاحظات</th>
                 </tr>
-              ) : (
-                myTodayTx.map(tx => (
-                  <tr key={tx.id} className="hover:bg-dark-850/50 transition">
-                    <td className="p-3.5 font-bold font-mono text-gold-400">{tx.ticketNumber}</td>
-                    <td className="p-3.5 text-slate-400 font-mono">{formatDateTime(tx.createdAt)}</td>
-                    <td className="p-3.5 max-w-[200px] truncate">
-                      {tx.items.map(i => i.serviceName).join(' + ')}
-                    </td>
-                    <td className="p-3.5 font-bold font-mono text-slate-100">
-                      {formatCurrency(tx.collectedAmount)}
-                    </td>
-                    <td className="p-3.5 font-bold font-mono text-emerald-400">
-                      {formatCurrency(tx.commissionSnapshot.totalCommission)}
-                    </td>
-                    <td className="p-3.5">
-                      <span className="px-2 py-0.5 rounded-lg bg-dark-800 text-[11px] font-mono border border-dark-700">
-                        {tx.paymentMethod}
-                      </span>
-                    </td>
-                    <td className="p-3.5">
-                      <Badge
-                        variant={
-                          tx.status === 'COMPLETED'
-                            ? 'success'
-                            : tx.status === 'VOIDED'
-                            ? 'danger'
-                            : 'warning'
-                        }
-                      >
-                        {tx.status === 'COMPLETED'
-                          ? 'مكتمل'
-                          : tx.status === 'VOIDED'
-                          ? 'ملغي'
-                          : 'طلب تعديل معلق'}
-                      </Badge>
-                    </td>
-                    <td className="p-3.5 text-center">
-                      {tx.status === 'COMPLETED' && (
-                        <button
-                          onClick={() => {
-                            setSelectedTxId(tx.id);
-                            setIsCorrectionModalOpen(true);
-                          }}
-                          className="text-[11px] text-amber-400 hover:text-amber-300 hover:underline flex items-center justify-center gap-1 mx-auto"
-                        >
-                          <FileEdit className="w-3.5 h-3.5" />
-                          <span>طلب تصحيح</span>
-                        </button>
-                      )}
+              </thead>
+              <tbody className="divide-y divide-dark-800 text-slate-200">
+                {todayOps.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-500">
+                      لم تقم بتسجيل أي عملاء بعد اليوم. اضغط على «تسجيل عميل جديد» للبدء.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  todayOps.map(op => (
+                    <tr key={op.id} className="hover:bg-dark-850/50 transition">
+                      <td className="p-4 font-bold font-mono text-gold-400">
+                        {op.operationNumber}
+                      </td>
+                      <td className="p-4 font-semibold text-slate-100">
+                        {op.serviceName}
+                      </td>
+                      <td className="p-4 font-bold font-mono text-emerald-400">
+                        {formatCurrency(op.amount)}
+                      </td>
+                      <td className="p-4 font-mono text-slate-400">
+                        {new Date(op.createdAt).toLocaleTimeString('ar-EG', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
+                      </td>
+                      <td className="p-4 text-slate-400">
+                        {op.notes || '-'}
+                        {op.isModifiedByAdmin && (
+                          <span className="text-[10px] text-amber-400 block mt-0.5">
+                            (تم مراجعة المبلغ وتصحيحه من الإدارة)
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Tab Content: Advances */}
+        {activeTab === 'advances' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs">
+              <thead className="bg-dark-800/60 text-slate-400 font-semibold border-b border-dark-750">
+                <tr>
+                  <th className="p-4">كود السلفة</th>
+                  <th className="p-4">المبلغ</th>
+                  <th className="p-4">سبب السلفة</th>
+                  <th className="p-4">التاريخ والوقت</th>
+                  <th className="p-4">المتبقي للرد</th>
+                  <th className="p-4">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-dark-800 text-slate-200">
+                {myAdvances.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-500">
+                      لا توجد أي سلف مسجلة بحسابك.
+                    </td>
+                  </tr>
+                ) : (
+                  myAdvances.map(adv => (
+                    <tr key={adv.id} className="hover:bg-dark-850/50 transition">
+                      <td className="p-4 font-bold font-mono text-gold-400">
+                        {adv.advanceNumber}
+                      </td>
+                      <td className="p-4 font-bold font-mono text-amber-400">
+                        {formatCurrency(adv.amount)}
+                      </td>
+                      <td className="p-4 text-slate-300">{adv.reason}</td>
+                      <td className="p-4 font-mono text-slate-400">
+                        {formatDateTime(adv.createdAt)}
+                      </td>
+                      <td className="p-4 font-mono font-bold text-slate-200">
+                        {formatCurrency(adv.remainingAmount)}
+                      </td>
+                      <td className="p-4">
+                        <Badge
+                          variant={
+                            adv.status === 'REPAID'
+                              ? 'success'
+                              : adv.status === 'APPROVED'
+                              ? 'gold'
+                              : adv.status === 'PARTIALLY_REPAID'
+                              ? 'info'
+                              : 'warning'
+                          }
+                        >
+                          {adv.status === 'PENDING'
+                            ? 'بانتظار مراجعة الأدمن'
+                            : adv.status === 'APPROVED'
+                            ? 'معتمدة'
+                            : adv.status === 'PARTIALLY_REPAID'
+                            ? 'سداد جزئي'
+                            : 'مسددة بالكامل'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Advance Request Modal */}
+      {/* 5. Modal: تسجيل عميل جديد */}
       <Modal
-        isOpen={isAdvanceModalOpen}
-        onClose={() => setIsAdvanceModalOpen(false)}
-        title="طلب سلفة جديدة"
-        subtitle="سيتم إرسال الطلب إلى الإدارة للاعتماد وتحديد طريقة وجدولة السداد"
+        isOpen={isNewClientOpen}
+        onClose={() => setIsNewClientOpen(false)}
+        title="تسجيل حلاقة جديدة"
+        subtitle="سجل نوع الحلاقة والمبلغ المحصل من العميل"
+        maxWidth="md"
       >
-        <form onSubmit={handleRequestAdvance} className="space-y-4">
+        <form onSubmit={handleSaveClient} className="space-y-4 text-xs">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              مبلغ السلفة المطلوب (ج.م):
+            <label className="block text-slate-300 font-bold mb-2">
+              نوع الحلاقة:
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {db.services.map(srv => {
+                const isSelected = selectedServiceId === srv.id;
+                return (
+                  <button
+                    key={srv.id}
+                    type="button"
+                    onClick={() => handleServiceChange(srv.id)}
+                    className={`p-3 rounded-2xl border text-right transition flex items-center justify-between ${
+                      isSelected
+                        ? 'bg-gold-500/15 border-gold-500/50 text-gold-300 font-bold shadow-gold-sm'
+                        : 'bg-dark-800 hover:bg-dark-750 border-dark-700 text-slate-200'
+                    }`}
+                  >
+                    <span>{srv.name}</span>
+                    <span className="font-mono text-xs opacity-70">
+                      {formatCurrency(srv.defaultPrice)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1.5">
+              المبلغ اللي أخدته من العميل:
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                min="0"
+                step="5"
+                required
+                value={serviceAmount}
+                onChange={e => setServiceAmount(e.target.value)}
+                className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-4 py-3 text-base font-bold font-mono text-gold-300 focus:outline-none focus:border-gold-500/60"
+              />
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">
+                جنيه
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1.5">
+              ملاحظات (اختياري):
             </label>
             <input
-              type="number"
-              min="50"
-              step="50"
-              required
-              value={advanceAmount}
-              onChange={e => setAdvanceAmount(e.target.value)}
-              placeholder="مثال: 1000"
-              className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-gold-500/50"
+              type="text"
+              value={clientNotes}
+              onChange={e => setClientNotes(e.target.value)}
+              placeholder="أي ملاحظة إضافية..."
+              className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-4 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-gold-500/60"
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              سبب طلب السلفة:
-            </label>
-            <textarea
-              rows={3}
-              required
-              value={advanceReason}
-              onChange={e => setAdvanceReason(e.target.value)}
-              placeholder="اذكر سبب الطلب بوضوح للإدارة..."
-              className="w-full bg-dark-800 border border-dark-750 rounded-xl p-3 text-xs text-slate-100 focus:outline-none focus:border-gold-500/50"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" type="button" onClick={() => setIsAdvanceModalOpen(false)}>
+          <div className="pt-2 flex items-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setIsNewClientOpen(false)}
+            >
               إلغاء
             </Button>
-            <Button variant="gold" type="submit">
-              إرسال الطلب
+            <Button type="submit" variant="gold" size="lg" className="flex-1 shadow-gold-md">
+              <CheckCircle2 className="w-5 h-5 ml-1.5" />
+              <span>حفظ العميل</span>
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* Start Shift Modal */}
+      {/* 6. Modal: تسجيل سلفة */}
       <Modal
-        isOpen={isShiftModalOpen}
-        onClose={() => setIsShiftModalOpen(false)}
-        title="افتتاح وردية جديدة"
-        subtitle="تسجيل عهدة الفكة في بداية الوردية"
+        isOpen={isAdvanceOpen}
+        onClose={() => setIsAdvanceOpen(false)}
+        title="تسجيل سلفة من الدرج"
+        subtitle="سجل المبلغ الذي أخذته لتوثيقه في حركة نقدية المحل"
+        maxWidth="md"
       >
-        <div className="space-y-4">
+        <form onSubmit={handleSaveAdvance} className="space-y-4 text-xs">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              رصيد عهدة الفكة الافتتاحي (ج.م):
+            <label className="block text-slate-300 font-bold mb-1.5">
+              المبلغ اللي أخدته:
             </label>
-            <input
-              type="number"
-              value={openingCash}
-              onChange={e => setOpeningCash(e.target.value)}
-              className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-gold-500/50"
-            />
+            <div className="relative">
+              <input
+                type="number"
+                min="10"
+                step="10"
+                required
+                value={advanceAmount}
+                onChange={e => setAdvanceAmount(e.target.value)}
+                placeholder="200"
+                className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-4 py-3 text-base font-bold font-mono text-amber-400 focus:outline-none focus:border-gold-500/60"
+              />
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">
+                جنيه
+              </span>
+            </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              ملاحظات بداية الوردية:
+            <label className="block text-slate-300 font-bold mb-1.5">
+              سبب السلفة:
             </label>
             <input
               type="text"
-              value={shiftNotes}
-              onChange={e => setShiftNotes(e.target.value)}
-              placeholder="مثال: استلام درج 1 بكامل العهدة"
-              className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-gold-500/50"
+              required
+              value={advanceReason}
+              onChange={e => setAdvanceReason(e.target.value)}
+              placeholder="مثال: ظرف شخصي، بنزين، مشوار..."
+              className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-4 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-gold-500/60"
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setIsShiftModalOpen(false)}>
+          <div className="p-3 bg-dark-850 rounded-2xl border border-dark-750 space-y-2 text-slate-400 text-xs">
+            <div className="flex justify-between">
+              <span>اسم الموظف:</span>
+              <span className="font-bold text-slate-200">{employeeName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>التاريخ والوقت:</span>
+              <span className="font-mono text-slate-300">تلقائي (الآن)</span>
+            </div>
+            <div className="flex justify-between">
+              <span>حالة التسجيل:</span>
+              <Badge variant="warning">بانتظار مراجعة الأدمن</Badge>
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setIsAdvanceOpen(false)}
+            >
               إلغاء
             </Button>
-            <Button variant="gold" onClick={handleStartShift}>
-              تأكيد فتح الوردية
+            <Button type="submit" variant="gold" size="lg" className="flex-1 shadow-gold-md">
+              <HandCoins className="w-5 h-5 ml-1.5" />
+              <span>تأكيد تسجيل السلفة</span>
             </Button>
           </div>
-        </div>
-      </Modal>
-
-      {/* End Shift Modal */}
-      <Modal
-        isOpen={isEndShiftModalOpen}
-        onClose={() => setIsEndShiftModalOpen(false)}
-        title="إغلاق الوردية وتوريد النقدية"
-        subtitle="قم بعد الكاش الفعلي الموجود في الدرج لتسجيل التسوية"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              المبلغ النقدي المحصي بالدرج (ج.م):
-            </label>
-            <input
-              type="number"
-              value={declaredCash}
-              onChange={e => setDeclaredCash(e.target.value)}
-              placeholder="أدخل إجمالي النقدية في الدرج"
-              className="w-full bg-dark-800 border border-dark-750 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-gold-500/50"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setIsEndShiftModalOpen(false)}>
-              إلغاء
-            </Button>
-            <Button variant="danger" onClick={handleEndShift}>
-              تأكيد إغلاق الوردية
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Correction Request Modal */}
-      <Modal
-        isOpen={isCorrectionModalOpen}
-        onClose={() => setIsCorrectionModalOpen(false)}
-        title="تقديم طلب تصحيح أو إلغاء تذكرة"
-        subtitle="سيتم مراجعة الطلب بواسطة الإدارة قبل تطبيق أي قيد مالي عكسي"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              سبب طلب التصحيح / الإلغاء:
-            </label>
-            <textarea
-              rows={3}
-              value={correctionReason}
-              onChange={e => setCorrectionReason(e.target.value)}
-              placeholder="مثال: تم اختيار خدمة خاطئة بالخطأ أو العميل غيّر طلبه..."
-              className="w-full bg-dark-800 border border-dark-750 rounded-xl p-3 text-xs text-slate-100 focus:outline-none focus:border-gold-500/50"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setIsCorrectionModalOpen(false)}>
-              إلغاء
-            </Button>
-            <Button variant="gold" onClick={handleSubmitCorrection}>
-              رفع الطلب للإدارة
-            </Button>
-          </div>
-        </div>
+        </form>
       </Modal>
     </div>
   );

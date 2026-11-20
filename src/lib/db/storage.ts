@@ -1,7 +1,7 @@
 import { DatabaseSchema } from '../../types';
 import { INITIAL_DATABASE } from './mockData';
 
-const DB_STORAGE_KEY = 'MR_BARBERS_DB_V1';
+const DB_STORAGE_KEY = 'MR_BARBERS_SIMPLE_DB_V2';
 
 export class StorageEngine {
   private static instance: StorageEngine;
@@ -29,8 +29,7 @@ export class StorageEngine {
       const stored = localStorage.getItem(DB_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as DatabaseSchema;
-        // Verify schema version
-        if (parsed && parsed.version && parsed.settings) {
+        if (parsed && parsed.version === 2 && Array.isArray(parsed.employees) && Array.isArray(parsed.operations)) {
           this.memoryDb = parsed;
           return;
         }
@@ -83,43 +82,30 @@ export class StorageEngine {
     this.listeners.forEach(l => l(snapshot));
   }
 
-  /**
-   * Export complete database backup as a JSON string
-   */
   public exportBackup(): string {
     const db = this.getDb();
-    const backupPayload = {
+    return JSON.stringify({
       ...db,
       exportedAt: new Date().toISOString(),
-      checksum: 'VALID_' + Date.now().toString(36),
-    };
-    return JSON.stringify(backupPayload, null, 2);
+    }, null, 2);
   }
 
-  /**
-   * Restore database from JSON backup string with validation
-   */
   public restoreBackup(jsonString: string): { success: boolean; message: string } {
     try {
       const parsed = JSON.parse(jsonString);
-      if (!parsed.version || !parsed.settings || !Array.isArray(parsed.users) || !Array.isArray(parsed.services)) {
-        return { success: false, message: 'ملف النسخة الاحتياطية غير صالح أو تالف.' };
+      if (!parsed.version || !Array.isArray(parsed.employees) || !Array.isArray(parsed.operations)) {
+        return { success: false, message: 'ملف النسخة الاحتياطية غير صالح.' };
       }
 
       this.memoryDb = parsed as DatabaseSchema;
-      this.memoryDb.lastBackupDate = new Date().toISOString();
       this.persist();
       this.notifyListeners();
-
       return { success: true, message: 'تم استعادة قاعدة البيانات بنجاح.' };
     } catch (e) {
       return { success: false, message: 'فشل في قراءة ملف النسخة الاحتياطية.' };
     }
   }
 
-  /**
-   * Reset database to factory demo state
-   */
   public resetToFactory(): void {
     this.memoryDb = JSON.parse(JSON.stringify(INITIAL_DATABASE));
     this.persist();

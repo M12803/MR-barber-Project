@@ -1,20 +1,13 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import {
-  Scissors,
   LayoutDashboard,
   Users,
-  Sparkles,
+  Scissors,
   Receipt,
-  HandCoins,
-  Wallet,
-  ArrowDownCircle,
   FileSpreadsheet,
-  ShieldAlert,
   Settings,
-  Clock,
-  History,
-  FileCheck2,
+  HandCoins,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -23,31 +16,19 @@ export const Sidebar: React.FC = () => {
 
   const isAdmin = currentUser?.role === 'ADMIN';
 
-  // Count pending items for badges
-  const pendingCorrections = db.correctionRequests.filter(r => r.status === 'PENDING').length;
-  const pendingAdvances = db.advanceRequests.filter(a => a.status === 'PENDING').length;
+  // Count pending advances for Admin badge
+  const pendingAdvances = db.advances.filter(a => a.status === 'PENDING').length;
 
   const adminNavItems = [
-    { id: 'pos', label: 'نقطة البيع (POS)', icon: Scissors, badge: undefined },
     { id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard, badge: undefined },
-    { id: 'transactions', label: 'سجل التذاكر', icon: Receipt, badge: undefined },
-    { id: 'corrections', label: 'طلبات التعديل', icon: FileCheck2, badge: pendingCorrections > 0 ? pendingCorrections : undefined },
-    { id: 'employees', label: 'فريق العمل والعمولات', icon: Users, badge: undefined },
-    { id: 'services', label: 'قائمة الخدمات والأسعار', icon: Sparkles, badge: undefined },
-    { id: 'advances', label: 'السلف والأقساط', icon: HandCoins, badge: pendingAdvances > 0 ? pendingAdvances : undefined },
-    { id: 'cashbox', label: 'الخزينة والورديات', icon: Wallet, badge: undefined },
-    { id: 'expenses', label: 'المصروفات', icon: ArrowDownCircle, badge: undefined },
-    { id: 'reports', label: 'التقارير وتصدير Excel', icon: FileSpreadsheet, badge: undefined },
-    { id: 'audit', label: 'سجل الرقابة والأمان', icon: ShieldAlert, badge: undefined },
-    { id: 'settings', label: 'الإعدادات والنسخ الاحتياطي', icon: Settings, badge: undefined },
+    { id: 'employees', label: 'الموظفون', icon: Users, badge: undefined },
+    { id: 'operations', label: 'العمليات والسلف', icon: Receipt, badge: pendingAdvances > 0 ? pendingAdvances : undefined },
+    { id: 'reports', label: 'التقارير والإحصائيات', icon: FileSpreadsheet, badge: undefined },
+    { id: 'settings', label: 'الإعدادات والخدمات', icon: Settings, badge: undefined },
   ];
 
   const employeeNavItems = [
-    { id: 'pos', label: 'نقطة البيع (تذكرة جديدة)', icon: Scissors, badge: undefined },
-    { id: 'employee-home', label: 'إحصائياتي اليوم', icon: LayoutDashboard, badge: undefined },
-    { id: 'employee-transactions', label: 'تذاكري السابقة', icon: History, badge: undefined },
-    { id: 'employee-advances', label: 'سلفي وحسابي', icon: HandCoins, badge: undefined },
-    { id: 'employee-shift', label: 'تسجيل الوردية', icon: Clock, badge: undefined },
+    { id: 'employee-home', label: 'حسابي وتسجيلاتي', icon: Scissors, badge: undefined },
   ];
 
   const navItems = isAdmin ? adminNavItems : employeeNavItems;
@@ -55,15 +36,15 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className="w-64 bg-dark-900 border-l border-gold-500/15 flex flex-col h-[calc(100vh-4.5rem)] sticky top-18 select-none">
       <div className="p-4 border-b border-dark-800">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-gold-400/80 block mb-1">
-          {isAdmin ? 'إدارة النظام والتشغيل' : 'بوابة الموظف'}
+        <span className="text-[11px] font-bold uppercase tracking-wider text-gold-400 block mb-1">
+          {isAdmin ? 'إدارة الصالون (المالك)' : 'حساب الحلاق'}
         </span>
         <p className="text-xs text-slate-400 truncate">
-          {isAdmin ? 'التحكم الشامل والتقارير' : `الموظف: ${currentUser?.displayName}`}
+          {isAdmin ? 'التحكم الشامل والتقارير' : currentUser?.displayName}
         </p>
       </div>
 
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
         {navItems.map(item => {
           const Icon = item.icon;
           const isActive = currentView === item.id;
@@ -73,9 +54,9 @@ export const Sidebar: React.FC = () => {
               key={item.id}
               onClick={() => setCurrentView(item.id)}
               className={cn(
-                'w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 group text-right',
+                'w-full flex items-center justify-between px-4 py-3 rounded-2xl text-xs font-bold transition-all duration-200 group text-right',
                 isActive
-                  ? 'bg-gold-500/15 text-gold-300 border border-gold-500/30 shadow-gold-sm'
+                  ? 'bg-gold-500/15 text-gold-300 border border-gold-500/35 shadow-gold-sm'
                   : 'text-slate-400 hover:text-slate-100 hover:bg-dark-800/80 border border-transparent'
               )}
             >
@@ -100,13 +81,13 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* Footer System Status */}
-      <div className="p-3 border-t border-dark-800 bg-dark-950/40 text-center">
+      <div className="p-3.5 border-t border-dark-800 bg-dark-950/40 text-center">
         <div className="flex items-center justify-center gap-2 text-[11px] text-emerald-400 font-medium">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>يعمل محلياً (Offline First)</span>
+          <span>يعمل محلياً بدون إنترنت</span>
         </div>
         <p className="text-[10px] text-slate-500 mt-1 font-mono">
-          v1.0.0 | نظام رمشان للصالونات
+          MR Barbers System v2.0
         </p>
       </div>
     </aside>
