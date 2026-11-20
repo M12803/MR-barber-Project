@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { formatCurrency, formatDateTime } from '../../lib/utils';
+import { formatCurrency, formatDateTime, isToday } from '../../lib/utils';
 import { reportService } from '../../services/reportService';
 import { advanceService } from '../../services/advanceService';
 import { Button } from '../../components/ui/Button';
@@ -19,6 +19,7 @@ import {
   Eye,
   UserCheck,
   ShoppingBag,
+  Calendar,
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -34,6 +35,36 @@ export const AdminDashboard: React.FC = () => {
   const [repayAdvanceId, setRepayAdvanceId] = useState<string | null>(null);
   const [repayAmount, setRepayAmount] = useState<string>('100');
   const [repayNote, setRepayNote] = useState<string>('سداد نقدي في الدرج');
+
+  // Period Filter for employee performance cards
+  type EmpPeriod = 'today' | 'week' | 'month' | 'year';
+  const [empPeriod, setEmpPeriod] = useState<EmpPeriod>('today');
+
+  const now = new Date();
+  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  const getFilteredOpsForEmp = (empId: string, period: EmpPeriod) => {
+    return db.operations.filter(o => {
+      if (o.employeeId !== empId) return false;
+      if (period === 'today') return isToday(o.createdAt);
+      const d = new Date(o.createdAt);
+      if (period === 'week') return d >= oneWeekAgo;
+      if (period === 'month') return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      if (period === 'year') return d.getFullYear() === currentYear;
+      return true;
+    });
+  };
+
+  const getPeriodTitle = (p: EmpPeriod) => {
+    switch (p) {
+      case 'today': return 'اليوم';
+      case 'week': return 'هذا الأسبوع';
+      case 'month': return 'هذا الشهر';
+      case 'year': return 'هذه السنة';
+    }
+  };
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -207,31 +238,59 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Employee Cards Section (إدارة الموظفين) */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
+      {/* Employee Cards Section (إدارة ومتابعة دخل الحلاقين) */}
+      <div className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
               <Users className="w-4 h-4 text-gold-400" />
-              <span>إدارة الموظفين (كروت الحلاقين اليوم)</span>
+              <span>متابعة إنتاجية ودخل الحلاقين ({getPeriodTitle(empPeriod)})</span>
             </h3>
             <p className="text-xs text-slate-400">
-              اضغط على أي موظف لفتح حسابه ومتابعة تفاصيل تذاكره وسلفه
+              اختر الفترة الزمنية لمتابعة حلاقة كل موظف، واضغط على أي كارت لعرض كشف حسابه بالكامل
             </p>
           </div>
 
-          <Button variant="ghost" size="sm" onClick={() => setCurrentView('employees')}>
-            إدارة حسابات الفريق
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Period Switcher Tabs */}
+            <div className="flex items-center gap-1 bg-dark-900 border border-dark-800 p-1 rounded-2xl">
+              <span className="text-[11px] text-slate-400 px-2 flex items-center gap-1 font-medium">
+                <Calendar className="w-3.5 h-3.5 text-gold-400" />
+                الفترة:
+              </span>
+              {(
+                [
+                  { id: 'today', label: 'اليوم' },
+                  { id: 'week', label: 'هذا الأسبوع' },
+                  { id: 'month', label: 'هذا الشهر' },
+                  { id: 'year', label: 'هذه السنة' },
+                ] as const
+              ).map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setEmpPeriod(tab.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    empPeriod === tab.id
+                      ? 'bg-gold-500 text-dark-950 shadow-gold-sm'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-dark-800'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <Button variant="ghost" size="sm" onClick={() => setCurrentView('employees')}>
+              إدارة الفريق
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {db.employees.map(emp => {
-            const empTodayOps = db.operations.filter(
-              o => o.employeeId === emp.id && o.createdAt.startsWith(todayStr)
-            );
-            const clientsCount = empTodayOps.length;
-            const totalRevenue = empTodayOps.reduce((sum, o) => sum + o.amount, 0);
+            const empPeriodOps = getFilteredOpsForEmp(emp.id, empPeriod);
+            const clientsCount = empPeriodOps.length;
+            const totalRevenue = empPeriodOps.reduce((sum, o) => sum + o.amount, 0);
 
             const empAdvs = db.advances.filter(a => a.employeeId === emp.id);
             const remainingDebt = empAdvs.reduce((sum, a) => sum + a.remainingAmount, 0);
@@ -260,14 +319,14 @@ export const AdminDashboard: React.FC = () => {
 
                 <div className="mt-4 pt-3 border-t border-dark-800/80 space-y-2 text-xs w-full">
                   <div className="flex justify-between text-slate-400">
-                    <span>العملاء اليوم:</span>
+                    <span>عملاء {getPeriodTitle(empPeriod)}:</span>
                     <span className="font-bold text-slate-100 font-mono">
                       {clientsCount} عميل
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>إجمالي الحلاقة:</span>
-                    <span className="font-bold text-gold-400 font-mono">
+                    <span>حلاقة {getPeriodTitle(empPeriod)}:</span>
+                    <span className="font-bold text-gold-400 font-mono text-sm">
                       {formatCurrency(totalRevenue)}
                     </span>
                   </div>
@@ -296,28 +355,54 @@ export const AdminDashboard: React.FC = () => {
           maxWidth="2xl"
         >
           <div className="space-y-5 text-xs">
-            {/* Quick Metrics */}
+            {/* Quick Metrics by Periods */}
             {(() => {
-              const ops = db.operations.filter(o => o.employeeId === selectedEmp.id);
-              const totalMoney = ops.reduce((s, o) => s + o.amount, 0);
+              const todayOps = getFilteredOpsForEmp(selectedEmp.id, 'today');
+              const todayRev = todayOps.reduce((s, o) => s + o.amount, 0);
+
+              const weekOps = getFilteredOpsForEmp(selectedEmp.id, 'week');
+              const weekRev = weekOps.reduce((s, o) => s + o.amount, 0);
+
+              const monthOps = getFilteredOpsForEmp(selectedEmp.id, 'month');
+              const monthRev = monthOps.reduce((s, o) => s + o.amount, 0);
+
+              const yearOps = getFilteredOpsForEmp(selectedEmp.id, 'year');
+              const yearRev = yearOps.reduce((s, o) => s + o.amount, 0);
+
               const advs = db.advances.filter(a => a.employeeId === selectedEmp.id);
-              const totalAdv = advs.reduce((s, a) => s + a.amount, 0);
               const remAdv = advs.reduce((s, a) => s + a.remainingAmount, 0);
 
               return (
-                <div className="grid grid-cols-3 gap-3 p-4 bg-dark-800 rounded-2xl border border-dark-750">
-                  <div>
-                    <span className="text-slate-400 block mb-1">إجمالي العملاء:</span>
-                    <span className="text-xl font-bold font-mono text-slate-100">{ops.length} عميل</span>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-dark-800 rounded-2xl border border-dark-750">
+                    <div className="border-l border-dark-700/60 pl-2">
+                      <span className="text-slate-400 block mb-1">حلاقة اليوم:</span>
+                      <span className="text-base font-bold font-mono text-gold-400">{formatCurrency(todayRev)}</span>
+                      <span className="text-[10px] text-slate-500 block">({todayOps.length} عميل)</span>
+                    </div>
+                    <div className="border-l border-dark-700/60 pl-2">
+                      <span className="text-slate-400 block mb-1">هذا الأسبوع:</span>
+                      <span className="text-base font-bold font-mono text-gold-400">{formatCurrency(weekRev)}</span>
+                      <span className="text-[10px] text-slate-500 block">({weekOps.length} عميل)</span>
+                    </div>
+                    <div className="border-l border-dark-700/60 pl-2">
+                      <span className="text-slate-400 block mb-1">هذا الشهر:</span>
+                      <span className="text-base font-bold font-mono text-gold-400">{formatCurrency(monthRev)}</span>
+                      <span className="text-[10px] text-slate-500 block">({monthOps.length} عميل)</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block mb-1">هذه السنة:</span>
+                      <span className="text-base font-bold font-mono text-gold-400">{formatCurrency(yearRev)}</span>
+                      <span className="text-[10px] text-slate-500 block">({yearOps.length} عميل)</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block mb-1">إجمالي الحلاقة:</span>
-                    <span className="text-xl font-bold font-mono text-gold-400">{formatCurrency(totalMoney)}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block mb-1">متبقي السلف:</span>
-                    <span className="text-xl font-bold font-mono text-amber-400">{formatCurrency(remAdv)}</span>
-                  </div>
+
+                  {remAdv > 0 && (
+                    <div className="bg-amber-950/30 border border-amber-600/40 p-3 rounded-xl flex items-center justify-between text-xs text-amber-200">
+                      <span>إجمالي السلف المتبقية على الموظف حالياً:</span>
+                      <span className="font-mono font-bold text-amber-300 text-sm">{formatCurrency(remAdv)}</span>
+                    </div>
+                  )}
                 </div>
               );
             })()}

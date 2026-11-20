@@ -51,6 +51,33 @@ export function formatDate(isoString: string): string {
 }
 
 /**
+ * Returns YYYY-MM-DD in local computer time (not UTC)
+ */
+export function getLocalDateString(d = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Checks if an ISO timestamp occurred on the same local calendar day
+ */
+export function isToday(isoString: string): boolean {
+  try {
+    const opDate = new Date(isoString);
+    const now = new Date();
+    return (
+      opDate.getFullYear() === now.getFullYear() &&
+      opDate.getMonth() === now.getMonth() &&
+      opDate.getDate() === now.getDate()
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Generate a sequential, professional Ticket Number
  * Format: MR-YYYYMMDD-XXX
  */

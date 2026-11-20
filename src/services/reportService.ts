@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { dbStorage } from '../lib/db/storage';
-import { formatDateTime } from '../lib/utils';
+import { formatDateTime, isToday } from '../lib/utils';
 
 export interface DashboardSummary {
   todayRevenue: number;
@@ -37,16 +37,15 @@ export interface PeriodReport {
 export const reportService = {
   getDashboardSummary(): DashboardSummary {
     const db = dbStorage.getDb();
-    const todayStr = new Date().toISOString().slice(0, 10);
 
-    const todayOps = db.operations.filter(o => o.createdAt.startsWith(todayStr));
+    const todayOps = db.operations.filter(o => isToday(o.createdAt));
     const todayRevenue = todayOps.reduce((sum, o) => sum + o.amount, 0);
     const todayClients = todayOps.length;
 
-    const todayAdvancesList = db.advances.filter(a => a.createdAt.startsWith(todayStr));
+    const todayAdvancesList = db.advances.filter(a => isToday(a.createdAt));
     const todayAdvances = todayAdvancesList.reduce((sum, a) => sum + a.amount, 0);
 
-    const todayExpensesList = (db.expenses || []).filter(e => e.createdAt.startsWith(todayStr));
+    const todayExpensesList = (db.expenses || []).filter(e => isToday(e.createdAt));
     const todayExpenses = todayExpensesList.reduce((sum, e) => sum + e.amount, 0);
 
     const activeEmployees = db.employees.filter(e => e.isActive).length;
@@ -76,7 +75,7 @@ export const reportService = {
     // Filter operations by period
     const filteredOps = db.operations.filter(op => {
       if (period === 'all') return true;
-      if (period === 'today') return op.createdAt.startsWith(todayStr);
+      if (period === 'today') return isToday(op.createdAt);
 
       const opDate = new Date(op.createdAt);
       if (period === 'week') {
@@ -106,7 +105,7 @@ export const reportService = {
     // Filter advances by period
     const filteredAdvances = db.advances.filter(adv => {
       if (period === 'all') return true;
-      if (period === 'today') return adv.createdAt.startsWith(todayStr);
+      if (period === 'today') return isToday(adv.createdAt);
 
       const advDate = new Date(adv.createdAt);
       if (period === 'week') {
@@ -127,7 +126,7 @@ export const reportService = {
     // Filter expenses by period
     const filteredExpenses = (db.expenses || []).filter(exp => {
       if (period === 'all') return true;
-      if (period === 'today') return exp.createdAt.startsWith(todayStr);
+      if (period === 'today') return isToday(exp.createdAt);
 
       const expDate = new Date(exp.createdAt);
       if (period === 'week') {

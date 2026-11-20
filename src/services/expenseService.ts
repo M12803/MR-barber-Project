@@ -1,6 +1,6 @@
 import { dbStorage } from '../lib/db/storage';
 import { ShopExpense } from '../types';
-import { generateId } from '../lib/utils';
+import { generateId, isToday } from '../lib/utils';
 
 export const expenseService = {
   recordExpense(
@@ -51,8 +51,7 @@ export const expenseService = {
 
   getToday(): ShopExpense[] {
     const db = dbStorage.getDb();
-    const todayStr = new Date().toISOString().slice(0, 10);
-    return (db.expenses || []).filter(e => e.createdAt.startsWith(todayStr));
+    return (db.expenses || []).filter(e => isToday(e.createdAt));
   },
 
   deleteByAdmin(id: string): void {

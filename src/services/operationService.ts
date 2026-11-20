@@ -1,6 +1,6 @@
 import { dbStorage } from '../lib/db/storage';
 import { CustomerOperation } from '../types';
-import { generateId } from '../lib/utils';
+import { generateId, isToday } from '../lib/utils';
 
 export const operationService = {
   addOperation(
@@ -43,9 +43,8 @@ export const operationService = {
   },
 
   getTodayByEmployee(employeeId: string): CustomerOperation[] {
-    const todayStr = new Date().toISOString().slice(0, 10);
     return dbStorage.getDb().operations.filter(
-      op => op.employeeId === employeeId && op.createdAt.startsWith(todayStr)
+      op => op.employeeId === employeeId && isToday(op.createdAt)
     );
   },
 
