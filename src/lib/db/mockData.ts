@@ -1,7 +1,7 @@
 import { DatabaseSchema } from '../../types';
 
 export const INITIAL_DATABASE: DatabaseSchema = {
-  version: 2,
+  version: 3,
   settings: {
     shopName: 'صالون محمد رمضان',
     shopSubtitle: 'MR BARBERS - CUT • STYLE • CONFIDENCE',
@@ -98,10 +98,85 @@ export const INITIAL_DATABASE: DatabaseSchema = {
     { id: 'srv_7', name: 'تنظيف بشرة وماسك', defaultPrice: 150 },
   ],
   operations: [
-    // ... existing operations ...
+    {
+      id: 'op_1',
+      operationNumber: 'OP-1001',
+      employeeId: 'emp_mohamed',
+      employeeName: 'محمد',
+      serviceName: 'شعر ودقن',
+      amount: 120,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'op_2',
+      operationNumber: 'OP-1002',
+      employeeId: 'emp_ahmed',
+      employeeName: 'أحمد محمد',
+      serviceName: 'شعر بس',
+      amount: 80,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'op_3',
+      operationNumber: 'OP-1003',
+      employeeId: 'emp_mahmoud',
+      employeeName: 'محمود',
+      serviceName: 'حمام كريم',
+      amount: 70,
+      createdAt: new Date().toISOString(),
+    },
   ],
   advances: [
-    // ... existing advances ...
+    {
+      id: 'adv_1',
+      advanceNumber: 'ADV-01',
+      employeeId: 'emp_ahmed',
+      employeeName: 'أحمد محمد',
+      amount: 200,
+      reason: 'ظرف شخصي',
+      status: 'APPROVED',
+      repaidAmount: 0,
+      remainingAmount: 200,
+      createdAt: new Date().toISOString(),
+    },
   ],
   shiftLogs: [],
+  expenses: [
+    {
+      id: 'exp_1',
+      expenseNumber: 'EXP-01',
+      itemName: 'شفرات حلاقة دوركو أصلية',
+      amount: 150,
+      quantity: '2 علبة كبار',
+      category: 'مستلزمات حلاقة',
+      recordedByUserId: 'usr_ahmed',
+      recordedByName: 'أحمد محمد',
+      notes: 'تم الشراء من موزع المستلزمات',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'exp_2',
+      expenseNumber: 'EXP-02',
+      itemName: 'مناديل ورقية وكحول تعقيم',
+      amount: 85,
+      quantity: '4 باكت مناديل + 2 لتر كحول',
+      category: 'نظافة وتعقيم',
+      recordedByUserId: 'usr_mahmoud',
+      recordedByName: 'محمود',
+      notes: 'مستلزمات تعقيم للصالون',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'exp_3',
+      expenseNumber: 'EXP-03',
+      itemName: 'شاي وسكر ومياه معدنية',
+      amount: 60,
+      quantity: '1 باكت شاي و 2 كيلو سكر',
+      category: 'ضيافة ومشروبات',
+      recordedByUserId: 'usr_admin',
+      recordedByName: 'محمد رمضان (المالك)',
+      notes: 'ضيافة للزبائن والصالون',
+      createdAt: new Date().toISOString(),
+    },
+  ],
 };

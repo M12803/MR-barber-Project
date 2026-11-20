@@ -18,6 +18,7 @@ import {
   ArrowRight,
   Eye,
   UserCheck,
+  ShoppingBag,
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -110,8 +111,8 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* 4 Essential Metrics Cards (Section 4 in Spec) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 5 Essential Metrics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Metric 1: Today Revenue */}
         <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-5 rounded-3xl transition duration-300 shadow-sm">
           <div className="flex items-center justify-between">
@@ -121,7 +122,7 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-black text-gold-400 font-mono">
+            <span className="text-2xl lg:text-3xl font-black text-gold-400 font-mono">
               {formatCurrency(summary.todayRevenue)}
             </span>
             <span className="text-[11px] text-slate-500 block mt-1">
@@ -139,7 +140,7 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-black text-slate-100 font-mono">
+            <span className="text-2xl lg:text-3xl font-black text-slate-100 font-mono">
               {summary.todayClients}
             </span>
             <span className="text-[11px] text-slate-500 block mt-1">
@@ -157,25 +158,46 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-black text-amber-400 font-mono">
+            <span className="text-2xl lg:text-3xl font-black text-amber-400 font-mono">
               {formatCurrency(summary.todayAdvances)}
             </span>
             <span className="text-[11px] text-slate-500 block mt-1">
-              فلوس خرجت من الدرج اليوم
+              سلف خرجت من الدرج اليوم
             </span>
           </div>
         </div>
 
-        {/* Metric 4: Active Employees */}
+        {/* Metric 4: Today Expenses & Supplies */}
+        <div
+          onClick={() => setCurrentView('operations')}
+          className="bg-dark-900 border border-dark-800 hover:border-emerald-500/40 p-5 rounded-3xl transition duration-300 shadow-sm cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400 font-medium">مصاريف ومستلزمات</span>
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+              <ShoppingBag className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <span className="text-2xl lg:text-3xl font-black text-emerald-400 font-mono">
+              {formatCurrency(summary.todayExpenses)}
+            </span>
+            <span className="text-[11px] text-slate-500 block mt-1">
+              شراء مستلزمات اليوم
+            </span>
+          </div>
+        </div>
+
+        {/* Metric 5: Active Employees */}
         <div className="bg-dark-900 border border-dark-800 hover:border-gold-500/40 p-5 rounded-3xl transition duration-300 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs text-slate-400 font-medium">الموظفون</span>
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-gold-500/15 text-gold-400 flex items-center justify-center">
               <Scissors className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-black text-emerald-400 font-mono">
+            <span className="text-2xl lg:text-3xl font-black text-slate-200 font-mono">
               {summary.activeEmployees}
             </span>
             <span className="text-[11px] text-slate-500 block mt-1">

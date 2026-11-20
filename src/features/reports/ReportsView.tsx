@@ -14,6 +14,7 @@ import {
   Trophy,
   Wallet,
   Coins,
+  ShoppingBag,
 } from 'lucide-react';
 
 export const ReportsView: React.FC = () => {
@@ -69,14 +70,14 @@ export const ReportsView: React.FC = () => {
       </div>
 
       {/* Primary KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Metric 1: Total Service Revenue */}
         <div className="bg-dark-900 border border-dark-800 p-5 rounded-3xl">
           <div className="flex items-center justify-between text-slate-400 text-xs">
             <span>إجمالي إيراد الحلاقة</span>
             <TrendingUp className="w-4 h-4 text-gold-400" />
           </div>
-          <div className="text-3xl font-black text-gold-400 font-mono mt-2">
+          <div className="text-2xl lg:text-3xl font-black text-gold-400 font-mono mt-2">
             {formatCurrency(report.totalRevenue)}
           </div>
           <span className="text-[11px] text-slate-500 mt-1 block">
@@ -90,7 +91,7 @@ export const ReportsView: React.FC = () => {
             <span>إجمالي العملاء</span>
             <Users className="w-4 h-4 text-sky-400" />
           </div>
-          <div className="text-3xl font-black text-slate-100 font-mono mt-2">
+          <div className="text-2xl lg:text-3xl font-black text-slate-100 font-mono mt-2">
             {report.totalClients} <span className="text-xs font-normal text-slate-400">عميل</span>
           </div>
           <span className="text-[11px] text-slate-500 mt-1 block">
@@ -104,7 +105,7 @@ export const ReportsView: React.FC = () => {
             <span>السلف المسجلة من الدرج</span>
             <HandCoins className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-3xl font-black text-amber-400 font-mono mt-2">
+          <div className="text-2xl lg:text-3xl font-black text-amber-400 font-mono mt-2">
             {formatCurrency(report.totalAdvancesTaken)}
           </div>
           <div className="text-[11px] text-slate-400 mt-1 flex justify-between">
@@ -113,17 +114,31 @@ export const ReportsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Metric 4: Net Drawer Movement */}
+        {/* Metric 4: Total Shop Expenses & Supplies */}
+        <div className="bg-dark-900 border border-dark-800 p-5 rounded-3xl">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
+            <span>مصاريف ومستلزمات</span>
+            <ShoppingBag className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className="text-2xl lg:text-3xl font-black text-emerald-400 font-mono mt-2">
+            {formatCurrency(report.totalExpenses)}
+          </div>
+          <span className="text-[11px] text-slate-500 mt-1 block">
+            شراء مستلزمات وصيانة وضيافة
+          </span>
+        </div>
+
+        {/* Metric 5: Net Drawer Movement */}
         <div className="bg-dark-900 border border-dark-800 p-5 rounded-3xl">
           <div className="flex items-center justify-between text-slate-400 text-xs">
             <span>صافي حركة درج المحل</span>
             <Wallet className="w-4 h-4 text-emerald-400" />
           </div>
-          <div className="text-3xl font-black text-emerald-400 font-mono mt-2">
+          <div className="text-2xl lg:text-3xl font-black text-emerald-400 font-mono mt-2">
             {formatCurrency(report.drawerNetMovement)}
           </div>
           <span className="text-[11px] text-slate-500 mt-1 block">
-            الإيراد المحصل - السلف + السلف المستردة
+            الإيراد - السلف + المسترد - المصاريف
           </span>
         </div>
       </div>

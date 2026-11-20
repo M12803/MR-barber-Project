@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { formatCurrency, formatDateTime, soundFx } from '../../lib/utils';
 import { operationService } from '../../services/operationService';
 import { advanceService } from '../../services/advanceService';
+import { expenseService } from '../../services/expenseService';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
@@ -16,6 +17,7 @@ import {
   Sparkles,
   Receipt,
   AlertCircle,
+  ShoppingBag,
 } from 'lucide-react';
 
 export const EmployeeHome: React.FC = () => {
@@ -24,6 +26,7 @@ export const EmployeeHome: React.FC = () => {
   // Modals state
   const [isNewClientOpen, setIsNewClientOpen] = useState(false);
   const [isAdvanceOpen, setIsAdvanceOpen] = useState(false);
+  const [isExpenseOpen, setIsExpenseOpen] = useState(false);
 
   // New Client Form
   const [selectedServiceId, setSelectedServiceId] = useState(db.services[0]?.id || '');
@@ -34,8 +37,15 @@ export const EmployeeHome: React.FC = () => {
   const [advanceAmount, setAdvanceAmount] = useState('200');
   const [advanceReason, setAdvanceReason] = useState('ظرف شخصي');
 
-  // Active view tab in employee page: operations or advances
-  const [activeTab, setActiveTab] = useState<'operations' | 'advances'>('operations');
+  // Expense Form
+  const [expenseItem, setExpenseItem] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('100');
+  const [expenseQuantity, setExpenseQuantity] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('مستلزمات حلاقة');
+  const [expenseNotes, setExpenseNotes] = useState('');
+
+  // Active view tab in employee page: operations, advances, or expenses
+  const [activeTab, setActiveTab] = useState<'operations' | 'advances' | 'expenses'>('operations');
 
   const employee = db.employees.find(e => e.id === currentUser?.employeeId);
   const employeeId = employee?.id || currentUser?.employeeId || '';
@@ -96,6 +106,40 @@ export const EmployeeHome: React.FC = () => {
 
     setIsAdvanceOpen(false);
     setAdvanceReason('ظرف شخصي');
+    refreshDb();
+  };
+
+  // Submit Expense / Supplies Request
+  const handleSaveExpense = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountNum = Number(expenseAmount);
+
+    if (!amountNum || amountNum <= 0) {
+      alert('يرجى تحديد المبلغ المدفوع للمستلزمات');
+      return;
+    }
+    if (!expenseItem.trim()) {
+      alert('يرجى كتابة اسم المستلزمات أو المصروف');
+      return;
+    }
+
+    expenseService.recordExpense(
+      currentUser?.id || employeeId,
+      employeeName,
+      expenseItem,
+      amountNum,
+      expenseQuantity,
+      expenseCategory,
+      expenseNotes
+    );
+    soundFx.playSuccess();
+    soundFx.playCash();
+
+    setIsExpenseOpen(false);
+    setExpenseItem('');
+    setExpenseAmount('100');
+    setExpenseQuantity('');
+    setExpenseNotes('');
     refreshDb();
   };
 
@@ -175,8 +219,8 @@ export const EmployeeHome: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. The Two Big Main Action Buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* 3. The Three Main Action Buttons */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Button 1: Record New Client */}
         <button
           onClick={() => {
@@ -218,13 +262,34 @@ export const EmployeeHome: React.FC = () => {
             سجل المبلغ اللي أخدته من درج المحل لحفظ الحسابات
           </p>
         </button>
+
+        {/* Button 3: Record Expense / Supplies */}
+        <button
+          onClick={() => {
+            soundFx.playClick();
+            setIsExpenseOpen(true);
+          }}
+          className="group relative p-6 rounded-3xl bg-dark-900 hover:bg-dark-850 text-slate-100 font-bold border border-emerald-500/30 hover:border-emerald-400 shadow-sm hover:shadow-emerald-500/10 transition-all duration-200 active:scale-95 flex flex-col justify-between text-right min-h-[140px]"
+        >
+          <div className="flex items-center justify-between w-full">
+            <span className="text-xl font-black font-display text-emerald-400">
+              🛍️ تسجيل مستلزمات ومصاريف
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition">
+              <ShoppingBag className="w-5 h-5" />
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 font-normal mt-3">
+            شراء شفرات، كريمات، مناديل، شاي، أو أي مصاريف للمحل
+          </p>
+        </button>
       </div>
 
-      {/* 4. Tabbed History (تسجيلاتي اليوم + سلفي المسجلة) */}
+      {/* 4. Tabbed History (تسجيلاتي اليوم + سلفي المسجلة + مستلزمات ومصاريف المحل) */}
       <div className="bg-dark-900 border border-dark-800 rounded-3xl overflow-hidden shadow-sm">
         {/* Tab Headers */}
-        <div className="p-4 border-b border-dark-800 bg-dark-850 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="p-4 border-b border-dark-800 bg-dark-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setActiveTab('operations')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
@@ -233,7 +298,7 @@ export const EmployeeHome: React.FC = () => {
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              تسجيلاتي اليوم ({todayOps.length})
+              زبائني اليوم ({todayOps.length})
             </button>
             <button
               onClick={() => setActiveTab('advances')}
@@ -245,10 +310,20 @@ export const EmployeeHome: React.FC = () => {
             >
               سلفي المسجلة ({myAdvances.length})
             </button>
+            <button
+              onClick={() => setActiveTab('expenses')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                activeTab === 'expenses'
+                  ? 'bg-emerald-500 text-dark-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              مستلزمات ومصاريف المحل ({(db.expenses || []).length})
+            </button>
           </div>
 
           <span className="text-[11px] text-slate-500 hidden sm:block">
-            * السجلات للقراءة فقط ولا يمكن تعديلها إلا بواسطة الأدمن
+            * السجلات محفوظة مركزياً في حسابات المحل عند الأدمن
           </span>
         </div>
 
@@ -364,6 +439,69 @@ export const EmployeeHome: React.FC = () => {
                             ? 'سداد جزئي'
                             : 'مسددة بالكامل'}
                         </Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Tab Content: Expenses & Supplies */}
+        {activeTab === 'expenses' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs">
+              <thead className="bg-dark-800/60 text-slate-400 font-semibold border-b border-dark-750">
+                <tr>
+                  <th className="p-4">كود المصروف</th>
+                  <th className="p-4">الصنف / المستلزمات</th>
+                  <th className="p-4">المبلغ المدفوع</th>
+                  <th className="p-4">الكمية</th>
+                  <th className="p-4">التصنيف</th>
+                  <th className="p-4">المشتري / المسجل</th>
+                  <th className="p-4">التاريخ والوقت</th>
+                  <th className="p-4">ملاحظات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-dark-800 text-slate-200">
+                {(!db.expenses || db.expenses.length === 0) ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-slate-500">
+                      لا توجد أي مستلزمات أو مصاريف مسجلة بعد. اضغط على «تسجيل مستلزمات ومصاريف» للبدء.
+                    </td>
+                  </tr>
+                ) : (
+                  db.expenses.map(exp => (
+                    <tr key={exp.id} className="hover:bg-dark-850/50 transition">
+                      <td className="p-4 font-bold font-mono text-emerald-400">
+                        {exp.expenseNumber}
+                      </td>
+                      <td className="p-4 font-bold text-slate-100">
+                        {exp.itemName}
+                      </td>
+                      <td className="p-4 font-bold font-mono text-gold-400">
+                        {formatCurrency(exp.amount)}
+                      </td>
+                      <td className="p-4 text-slate-300 font-mono">
+                        {exp.quantity || '-'}
+                      </td>
+                      <td className="p-4">
+                        <Badge variant="neutral">
+                          {exp.category || 'عام'}
+                        </Badge>
+                      </td>
+                      <td className="p-4 font-semibold text-slate-200">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                          {exp.recordedByName}
+                        </span>
+                      </td>
+                      <td className="p-4 font-mono text-slate-400">
+                        {formatDateTime(exp.createdAt)}
+                      </td>
+                      <td className="p-4 text-slate-400">
+                        {exp.notes || '-'}
                       </td>
                     </tr>
                   ))
@@ -532,6 +670,127 @@ export const EmployeeHome: React.FC = () => {
             <Button type="submit" variant="gold" size="lg" className="flex-1 shadow-gold-md">
               <HandCoins className="w-5 h-5 ml-1.5" />
               <span>تأكيد تسجيل السلفة</span>
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* 7. Modal: تسجيل مستلزمات ومصاريف المحل */}
+      <Modal
+        isOpen={isExpenseOpen}
+        onClose={() => setIsExpenseOpen(false)}
+        title="تسجيل مستلزمات أو مصاريف للمحل"
+        subtitle="سجل المشتريات والمستلزمات (شفرات، مناديل، شاي، صيانة...) لتوثيقها عند الأدمن"
+        maxWidth="md"
+      >
+        <form onSubmit={handleSaveExpense} className="space-y-4 text-xs">
+          <div>
+            <label className="block text-slate-300 font-bold mb-1.5">
+              اسم الصنف / المستلزمات:
+            </label>
+            <input
+              type="text"
+              required
+              value={expenseItem}
+              onChange={e => setExpenseItem(e.target.value)}
+              placeholder="مثال: علبة شفرات دوركو، 5 باكت مناديل، شاي وسكر..."
+              className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500/60"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 font-bold mb-1.5">
+                المبلغ المدفوع (جنيه):
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={expenseAmount}
+                  onChange={e => setExpenseAmount(e.target.value)}
+                  placeholder="100"
+                  className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-4 py-2.5 text-base font-bold font-mono text-emerald-400 focus:outline-none focus:border-emerald-500/60"
+                />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-xs">
+                  جنيه
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-bold mb-1.5">
+                الكمية / العدد (اختياري):
+              </label>
+              <input
+                type="text"
+                value={expenseQuantity}
+                onChange={e => setExpenseQuantity(e.target.value)}
+                placeholder="مثال: علبتين، كرتونة، 3 حبات..."
+                className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500/60"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1.5">
+              تصنيف المصروف:
+            </label>
+            <select
+              value={expenseCategory}
+              onChange={e => setExpenseCategory(e.target.value)}
+              className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500/60"
+            >
+              <option value="مستلزمات حلاقة">✂️ مستلزمات حلاقة وعناية</option>
+              <option value="نظافة وتعقيم">🧼 نظافة وتعقيم ومطهرات</option>
+              <option value="ضيافة ومشروبات">☕ ضيافة ومشروبات (شاي، سكر، مياه)</option>
+              <option value="صيانة وتصليح">🔧 صيانة وأدوات وكهرباء</option>
+              <option value="فواتير ومصاريف عامة">📄 فواتير ومصاريف عامة</option>
+              <option value="أخرى">📦 أخرى</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1.5">
+              ملاحظات إضافية (اختياري):
+            </label>
+            <input
+              type="text"
+              value={expenseNotes}
+              onChange={e => setExpenseNotes(e.target.value)}
+              placeholder="اسم المحل اللي اشتريت منه أو أي تفاصيل..."
+              className="w-full bg-dark-800 border border-dark-700 rounded-2xl px-4 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/60"
+            />
+          </div>
+
+          <div className="p-3 bg-dark-850 rounded-2xl border border-dark-750 space-y-2 text-slate-400 text-xs">
+            <div className="flex justify-between">
+              <span>المشتري / المسجل:</span>
+              <span className="font-bold text-slate-200">{employeeName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>التاريخ والوقت:</span>
+              <span className="font-mono text-slate-300">تلقائي (الآن)</span>
+            </div>
+            <div className="flex justify-between">
+              <span>جهة الحفظ:</span>
+              <span className="text-emerald-400 font-bold">تسجل مباشرة في حسابات المحل للأدمن</span>
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setIsExpenseOpen(false)}
+            >
+              إلغاء
+            </Button>
+            <Button type="submit" variant="gold" size="lg" className="flex-1 shadow-gold-md">
+              <ShoppingBag className="w-5 h-5 ml-1.5 text-dark-950" />
+              <span>تأكيد وحفظ المستلزمات</span>
             </Button>
           </div>
         </form>

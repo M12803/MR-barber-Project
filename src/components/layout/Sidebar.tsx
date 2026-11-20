@@ -22,7 +22,7 @@ export const Sidebar: React.FC = () => {
   const adminNavItems = [
     { id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard, badge: undefined },
     { id: 'employees', label: 'الموظفون', icon: Users, badge: undefined },
-    { id: 'operations', label: 'العمليات والسلف', icon: Receipt, badge: pendingAdvances > 0 ? pendingAdvances : undefined },
+    { id: 'operations', label: 'العمليات والسلف والمصاريف', icon: Receipt, badge: pendingAdvances > 0 ? pendingAdvances : undefined },
     { id: 'reports', label: 'التقارير والإحصائيات', icon: FileSpreadsheet, badge: undefined },
     { id: 'settings', label: 'الإعدادات والخدمات', icon: Settings, badge: undefined },
   ];

@@ -6,6 +6,7 @@ export interface DashboardSummary {
   todayRevenue: number;
   todayClients: number;
   todayAdvances: number;
+  todayExpenses: number;
   activeEmployees: number;
   drawerNetCash: number;
 }
@@ -27,6 +28,7 @@ export interface PeriodReport {
   totalAdvancesTaken: number;
   totalAdvancesRepaid: number;
   remainingAdvancesDebt: number;
+  totalExpenses: number;
   drawerNetMovement: number;
   serviceCounts: Record<string, { count: number; total: number }>;
   employeeRanking: EmployeeReportItem[];
@@ -44,18 +46,23 @@ export const reportService = {
     const todayAdvancesList = db.advances.filter(a => a.createdAt.startsWith(todayStr));
     const todayAdvances = todayAdvancesList.reduce((sum, a) => sum + a.amount, 0);
 
+    const todayExpensesList = (db.expenses || []).filter(e => e.createdAt.startsWith(todayStr));
+    const todayExpenses = todayExpensesList.reduce((sum, e) => sum + e.amount, 0);
+
     const activeEmployees = db.employees.filter(e => e.isActive).length;
 
-    // Drawer net cash: Revenue from haircuts - advances taken + advances repaid
+    // Drawer net cash: Revenue from haircuts - advances taken + advances repaid - shop expenses
     const allRevenue = db.operations.reduce((s, o) => s + o.amount, 0);
     const allAdvancesTaken = db.advances.reduce((s, a) => s + a.amount, 0);
     const allAdvancesRepaid = db.advances.reduce((s, a) => s + a.repaidAmount, 0);
-    const drawerNetCash = allRevenue - allAdvancesTaken + allAdvancesRepaid;
+    const allExpenses = (db.expenses || []).reduce((s, e) => s + e.amount, 0);
+    const drawerNetCash = allRevenue - allAdvancesTaken + allAdvancesRepaid - allExpenses;
 
     return {
       todayRevenue,
       todayClients,
       todayAdvances,
+      todayExpenses,
       activeEmployees,
       drawerNetCash,
     };
@@ -116,7 +123,26 @@ export const reportService = {
     const totalAdvancesTaken = filteredAdvances.reduce((s, a) => s + a.amount, 0);
     const totalAdvancesRepaid = filteredAdvances.reduce((s, a) => s + a.repaidAmount, 0);
     const remainingAdvancesDebt = filteredAdvances.reduce((s, a) => s + a.remainingAmount, 0);
-    const drawerNetMovement = totalRevenue - totalAdvancesTaken + totalAdvancesRepaid;
+
+    // Filter expenses by period
+    const filteredExpenses = (db.expenses || []).filter(exp => {
+      if (period === 'all') return true;
+      if (period === 'today') return exp.createdAt.startsWith(todayStr);
+
+      const expDate = new Date(exp.createdAt);
+      if (period === 'week') {
+        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return expDate >= oneWeekAgo;
+      }
+      if (period === 'month') {
+        const currentMonth = todayStr.slice(0, 7);
+        return exp.createdAt.startsWith(currentMonth);
+      }
+      return true;
+    });
+
+    const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+    const drawerNetMovement = totalRevenue - totalAdvancesTaken + totalAdvancesRepaid - totalExpenses;
 
     // Employee ranking & performance
     const employeeRanking: EmployeeReportItem[] = db.employees.map(emp => {
@@ -149,6 +175,7 @@ export const reportService = {
       totalAdvancesTaken,
       totalAdvancesRepaid,
       remainingAdvancesDebt,
+      totalExpenses,
       drawerNetMovement,
       serviceCounts,
       employeeRanking,
@@ -170,6 +197,7 @@ export const reportService = {
       { 'البيان': 'إجمالي السلف المأخوذة من الدرج (جنيه)', 'القيمة': report.totalAdvancesTaken },
       { 'البيان': 'إجمالي السلف المستردة للدرج (جنيه)', 'القيمة': report.totalAdvancesRepaid },
       { 'البيان': 'متبقي السلف كمديونية (جنيه)', 'القيمة': report.remainingAdvancesDebt },
+      { 'البيان': 'إجمالي مصاريف ومستلزمات المحل (جنيه)', 'القيمة': report.totalExpenses },
       { 'البيان': 'صافي حركة درج المحل (جنيه)', 'القيمة': report.drawerNetMovement },
     ];
     const wsSummary = XLSX.utils.json_to_sheet(summaryData);
@@ -213,6 +241,20 @@ export const reportService = {
     }));
     const wsAdv = XLSX.utils.json_to_sheet(advData);
     XLSX.utils.book_append_sheet(wb, wsAdv, 'سجل_السلف');
+
+    // 5. Expenses Sheet
+    const expData = (db.expenses || []).map(e => ({
+      'كود المصروف': e.expenseNumber,
+      'التاريخ والوقت': formatDateTime(e.createdAt),
+      'اسم الصنف / المستلزمات': e.itemName,
+      'المبلغ (جنيه)': e.amount,
+      'الكمية': e.quantity || '',
+      'التصنيف': e.category || '',
+      'المشتري / المسجل': e.recordedByName,
+      'ملاحظات': e.notes || '',
+    }));
+    const wsExp = XLSX.utils.json_to_sheet(expData);
+    XLSX.utils.book_append_sheet(wb, wsExp, 'سجل_المصاريف_والمستلزمات');
 
     const dateStr = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `تقرير_الصالون_${period}_${dateStr}.xlsx`);

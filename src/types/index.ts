@@ -79,6 +79,19 @@ export interface ShiftLog {
   endTime?: string; // ISO timestamp, optional until logout
 }
 
+export interface ShopExpense {
+  id: string;
+  expenseNumber: string; // e.g. EXP-01
+  itemName: string; // اسم الصنف أو المستلزمات
+  amount: number; // المبلغ المدفوع
+  quantity?: string; // الكمية أو العدد (علبة، كرتونة، عدد 5...)
+  category?: string; // تصنيف المصروف (مستلزمات حلاقة، ضيافة ونظافة، صيانة وفواتير، أخرى)
+  recordedByUserId: string;
+  recordedByName: string; // اسم الموظف أو الأدمن اللي اشترى وسجل
+  notes?: string;
+  createdAt: string; // ISO timestamp
+}
+
 export interface DatabaseSchema {
   version: number;
   settings: ShopSettings;
@@ -89,4 +102,6 @@ export interface DatabaseSchema {
   advances: Advance[];
   /** New collection for shift tracking */
   shiftLogs: ShiftLog[];
+  /** New collection for shop expenses and supplies */
+  expenses: ShopExpense[];
 }

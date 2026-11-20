@@ -30,9 +30,12 @@ export class StorageEngine {
       if (stored) {
         const parsed = JSON.parse(stored) as DatabaseSchema;
         if (parsed && Array.isArray(parsed.employees) && Array.isArray(parsed.operations)) {
-          // Defensive: add missing shiftLogs if not present (migration guard)
+          // Defensive: add missing collections if not present (migration guard)
           if (!Array.isArray(parsed.shiftLogs)) {
             parsed.shiftLogs = [];
+          }
+          if (!Array.isArray(parsed.expenses)) {
+            parsed.expenses = JSON.parse(JSON.stringify(INITIAL_DATABASE.expenses || []));
           }
           this.memoryDb = parsed;
           return;
