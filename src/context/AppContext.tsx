@@ -9,7 +9,7 @@ interface AppContextType {
   currentView: string;
   setCurrentView: (view: string) => void;
   login: (username: string, pin: string) => { success: boolean; error?: string };
-  quickSwitch: (pin: string) => { success: boolean; error?: string };
+  quickSwitch: (pin: string, targetUserId?: string) => { success: boolean; error?: string };
   logout: () => void;
   refreshDb: () => void;
 }
@@ -75,12 +75,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return { success: true };
   };
 
-  const quickSwitch = (pin: string): { success: boolean; error?: string } => {
+  const quickSwitch = (pin: string, targetUserId?: string): { success: boolean; error?: string } => {
     const currentDb = dbStorage.getDb();
-    const user = currentDb.users.find(u => u.pinCode === pin && u.isActive);
+    const cleanPin = pin.trim();
 
-    if (!user) {
-      return { success: false, error: 'رمز الدخول غير مسجل' };
+    let user: User | undefined;
+    if (targetUserId) {
+      const target = currentDb.users.find(u => u.id === targetUserId);
+      if (!target || !target.isActive) {
+        return { success: false, error: 'هذا الحساب غير متوفر أو معطل حالياً' };
+      }
+      if (target.pinCode !== cleanPin) {
+        return { success: false, error: `رمز الدخول (PIN) غير صحيح لحساب (${target.displayName})` };
+      }
+      user = target;
+    } else {
+      user = currentDb.users.find(u => u.pinCode === cleanPin && u.isActive);
+      if (!user) {
+        return { success: false, error: 'رمز الدخول (PIN) غير مسجل' };
+      }
     }
 
     // close current user's shift
