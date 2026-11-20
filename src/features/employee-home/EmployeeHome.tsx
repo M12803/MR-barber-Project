@@ -117,7 +117,7 @@ export const EmployeeHome: React.FC = () => {
             <div className="flex items-center gap-2 mt-1">
               <Badge variant="gold">موظف</Badge>
               <span className="text-xs text-slate-400">
-                صالون محمد رمشان للرجال
+                {db.settings.shopName}
               </span>
             </div>
           </div>

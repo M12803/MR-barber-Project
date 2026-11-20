@@ -71,6 +71,14 @@ export interface ShopSettings {
   currency: string;
 }
 
+export interface ShiftLog {
+  id: string; // uuid
+  employeeId: string;
+  employeeName: string;
+  startTime: string; // ISO timestamp
+  endTime?: string; // ISO timestamp, optional until logout
+}
+
 export interface DatabaseSchema {
   version: number;
   settings: ShopSettings;
@@ -79,4 +87,6 @@ export interface DatabaseSchema {
   services: ServiceType[];
   operations: CustomerOperation[];
   advances: Advance[];
+  /** New collection for shift tracking */
+  shiftLogs: ShiftLog[];
 }

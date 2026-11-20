@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, DatabaseSchema } from '../types';
+import { User, DatabaseSchema, ShiftLog } from '../types';
 import { dbStorage } from '../lib/db/storage';
 import { soundFx } from '../lib/utils';
 
@@ -18,12 +18,9 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [db, setDb] = useState<DatabaseSchema>(dbStorage.getDb());
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    // Default to admin or first user
-    const admin = dbStorage.getDb().users.find(u => u.role === 'ADMIN');
-    return admin || null;
-  });
-  const [currentView, setCurrentView] = useState<string>('dashboard');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentView, setCurrentView] = useState<string>('login');
+  const [currentShiftId, setCurrentShiftId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = dbStorage.subscribe(newDb => {
@@ -36,7 +33,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setDb({ ...dbStorage.getDb() });
   };
 
-  const login = (username: string, pin: string) => {
+  const createShiftLog = (user: User) => {
+    const newShift: ShiftLog = {
+      id: crypto.randomUUID(),
+      employeeId: user.employeeId ?? user.id,
+      employeeName: user.role === 'ADMIN' ? user.displayName : user.displayName,
+      startTime: new Date().toISOString(),
+    };
+    dbStorage.updateDb(d => {
+      // defensive guard – in case old localStorage schema lacks shiftLogs
+      if (!Array.isArray(d.shiftLogs)) d.shiftLogs = [];
+      d.shiftLogs.push(newShift);
+    });
+    setCurrentShiftId(newShift.id);
+  };
+
+  const login = (username: string, pin: string): { success: boolean; error?: string } => {
     const currentDb = dbStorage.getDb();
     const cleanUser = username.trim().toLowerCase();
     const user = currentDb.users.find(u => u.username.toLowerCase() === cleanUser);
@@ -52,6 +64,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     setCurrentUser(user);
+    createShiftLog(user);
     soundFx.playSuccess();
 
     if (user.role === 'EMPLOYEE') {
@@ -62,7 +75,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return { success: true };
   };
 
-  const quickSwitch = (pin: string) => {
+  const quickSwitch = (pin: string): { success: boolean; error?: string } => {
     const currentDb = dbStorage.getDb();
     const user = currentDb.users.find(u => u.pinCode === pin && u.isActive);
 
@@ -70,8 +83,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { success: false, error: 'رمز الدخول غير مسجل' };
     }
 
+    // close current user's shift
+    if (currentShiftId) {
+      dbStorage.updateDb(d => {
+        if (!Array.isArray(d.shiftLogs)) d.shiftLogs = [];
+        const log = d.shiftLogs.find(l => l.id === currentShiftId && !l.endTime);
+        if (log) log.endTime = new Date().toISOString();
+      });
+    }
+
     setCurrentUser(user);
+    createShiftLog(user);
     soundFx.playSuccess();
+
     if (user.role === 'EMPLOYEE') {
       setCurrentView('employee-home');
     } else {
@@ -81,8 +105,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const logout = () => {
+    if (currentShiftId) {
+      dbStorage.updateDb(d => {
+        if (!Array.isArray(d.shiftLogs)) d.shiftLogs = [];
+        const log = d.shiftLogs.find(l => l.id === currentShiftId && !l.endTime);
+        if (log) log.endTime = new Date().toISOString();
+      });
+    }
     setCurrentUser(null);
     setCurrentView('login');
+    setCurrentShiftId(null);
     soundFx.playClick();
   };
 

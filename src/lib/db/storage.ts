@@ -1,7 +1,7 @@
 import { DatabaseSchema } from '../../types';
 import { INITIAL_DATABASE } from './mockData';
 
-const DB_STORAGE_KEY = 'MR_BARBERS_SIMPLE_DB_V2';
+const DB_STORAGE_KEY = 'MR_BARBERS_SIMPLE_DB_V3';
 
 export class StorageEngine {
   private static instance: StorageEngine;
@@ -21,7 +21,7 @@ export class StorageEngine {
 
   private init(): void {
     if (typeof window === 'undefined') {
-      this.memoryDb = INITIAL_DATABASE;
+      this.memoryDb = JSON.parse(JSON.stringify(INITIAL_DATABASE));
       return;
     }
 
@@ -29,7 +29,11 @@ export class StorageEngine {
       const stored = localStorage.getItem(DB_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as DatabaseSchema;
-        if (parsed && parsed.version === 2 && Array.isArray(parsed.employees) && Array.isArray(parsed.operations)) {
+        if (parsed && Array.isArray(parsed.employees) && Array.isArray(parsed.operations)) {
+          // Defensive: add missing shiftLogs if not present (migration guard)
+          if (!Array.isArray(parsed.shiftLogs)) {
+            parsed.shiftLogs = [];
+          }
           this.memoryDb = parsed;
           return;
         }
@@ -38,7 +42,7 @@ export class StorageEngine {
       console.error('Failed to parse stored DB, resetting to defaults:', e);
     }
 
-    // Default init
+    // Default init — fresh data with correct credentials and shiftLogs
     this.memoryDb = JSON.parse(JSON.stringify(INITIAL_DATABASE));
     this.persist();
   }

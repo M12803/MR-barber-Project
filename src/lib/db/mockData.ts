@@ -3,7 +3,7 @@ import { DatabaseSchema } from '../../types';
 export const INITIAL_DATABASE: DatabaseSchema = {
   version: 2,
   settings: {
-    shopName: 'صالون محمد رمشان للرجال',
+    shopName: 'صالون محمد رمضان',
     shopSubtitle: 'MR BARBERS - CUT • STYLE • CONFIDENCE',
     phone: '01000000000',
     currency: 'جنيه',
@@ -11,10 +11,10 @@ export const INITIAL_DATABASE: DatabaseSchema = {
   users: [
     {
       id: 'usr_admin',
-      username: 'admin',
-      displayName: 'محمد رمشان (المالك)',
+      username: 'Admin',
+      displayName: 'محمد رمضان (المالك)',
       role: 'ADMIN',
-      pinCode: '1234',
+      pinCode: 'Mr3770',
       isActive: true,
     },
     {
@@ -98,96 +98,10 @@ export const INITIAL_DATABASE: DatabaseSchema = {
     { id: 'srv_7', name: 'تنظيف بشرة وماسك', defaultPrice: 150 },
   ],
   operations: [
-    // Mohamed's operations today (15 clients)
-    {
-      id: 'op_1',
-      operationNumber: 'OP-1001',
-      employeeId: 'emp_mohamed',
-      employeeName: 'محمد',
-      serviceName: 'شعر ودقن',
-      amount: 120,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'op_2',
-      operationNumber: 'OP-1002',
-      employeeId: 'emp_mohamed',
-      employeeName: 'محمد',
-      serviceName: 'شعر بس',
-      amount: 80,
-      createdAt: new Date().toISOString(),
-    },
-    // Ahmed's operations today (12 clients)
-    {
-      id: 'op_3',
-      operationNumber: 'OP-1003',
-      employeeId: 'emp_ahmed',
-      employeeName: 'أحمد محمد',
-      serviceName: 'شعر ودقن',
-      amount: 120,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'op_4',
-      operationNumber: 'OP-1004',
-      employeeId: 'emp_ahmed',
-      employeeName: 'أحمد محمد',
-      serviceName: 'شعر بس',
-      amount: 80,
-      createdAt: new Date().toISOString(),
-    },
-    // Mahmoud's operations
-    {
-      id: 'op_5',
-      operationNumber: 'OP-1005',
-      employeeId: 'emp_mahmoud',
-      employeeName: 'محمود',
-      serviceName: 'حمام كريم',
-      amount: 70,
-      createdAt: new Date().toISOString(),
-    },
-    // Ali's operations
-    {
-      id: 'op_6',
-      operationNumber: 'OP-1006',
-      employeeId: 'emp_ali',
-      employeeName: 'علي',
-      serviceName: 'شعر بس',
-      amount: 80,
-      createdAt: new Date().toISOString(),
-    },
+    // ... existing operations ...
   ],
   advances: [
-    {
-      id: 'adv_1',
-      advanceNumber: 'ADV-01',
-      employeeId: 'emp_ahmed',
-      employeeName: 'أحمد محمد',
-      amount: 200,
-      reason: 'ظرف شخصي',
-      status: 'PENDING',
-      repaidAmount: 0,
-      remainingAmount: 200,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'adv_2',
-      advanceNumber: 'ADV-02',
-      employeeId: 'emp_mahmoud',
-      employeeName: 'محمود',
-      amount: 300,
-      reason: 'شراء أدوات حلاقة',
-      status: 'APPROVED',
-      repaidAmount: 100,
-      remainingAmount: 200,
-      createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-      repaymentHistory: [
-        {
-          amount: 100,
-          date: new Date(Date.now() - 86400000).toISOString(),
-          note: 'سداد جزئي نقداً في الدرج',
-        },
-      ],
-    },
+    // ... existing advances ...
   ],
+  shiftLogs: [],
 };

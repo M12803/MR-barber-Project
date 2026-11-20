@@ -14,8 +14,8 @@ import {
   Save,
   Download,
   Upload,
-  RotateCcw,
   CheckCircle2,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -26,6 +26,13 @@ export const SettingsView: React.FC = () => {
   const [shopSubtitle, setShopSubtitle] = useState(db.settings.shopSubtitle);
   const [phone, setPhone] = useState(db.settings.phone);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Admin credentials
+  const adminUser = db.users.find(u => u.role === 'ADMIN');
+  const [adminUsername, setAdminUsername] = useState(adminUser?.username || 'Admin');
+  const [adminPassword, setAdminPassword] = useState(adminUser?.pinCode || '');
+  const [adminSaveSuccess, setAdminSaveSuccess] = useState(false);
+  const [adminError, setAdminError] = useState('');
 
   // Service Edit / Add Modal
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -42,6 +49,29 @@ export const SettingsView: React.FC = () => {
     });
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
+    refreshDb();
+  };
+
+  const handleSaveAdminCredentials = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminError('');
+    if (!adminUsername.trim()) {
+      setAdminError('اسم المستخدم مطلوب');
+      return;
+    }
+    if (!adminPassword.trim() || adminPassword.length < 4) {
+      setAdminError('كلمة المرور يجب أن تكون 4 أحرف على الأقل');
+      return;
+    }
+    dbStorage.updateDb(d => {
+      const a = d.users.find(u => u.role === 'ADMIN');
+      if (a) {
+        a.username = adminUsername.trim();
+        a.pinCode = adminPassword.trim();
+      }
+    });
+    setAdminSaveSuccess(true);
+    setTimeout(() => setAdminSaveSuccess(false), 3000);
     refreshDb();
   };
 
@@ -102,7 +132,7 @@ export const SettingsView: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `نسخة_صالون_رمشان_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `نسخة_صالون_رمضان_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -250,9 +280,54 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column: Backup & Restore (1 col) */}
+        {/* Right Column: Admin Credentials + Backup & Restore (1 col) */}
         <div className="space-y-6">
-          <div className="bg-dark-900 border border-dark-800 rounded-3xl p-6 shadow-sm">
+          {/* Admin Credentials Card */}
+          <div className="bg-dark-900 border border-gold-500/20 rounded-3xl p-6 shadow-sm">
+            <h3 className="font-bold text-base text-slate-100 mb-1 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-gold-400" />
+              بيانات دخول الأدمن
+            </h3>
+            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+              غيّر اسم المستخدم وكلمة المرور بتاعتك. تأكد منهم قبل الحفظ.
+            </p>
+            <form onSubmit={handleSaveAdminCredentials} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">اسم المستخدم:</label>
+                <input
+                  type="text"
+                  value={adminUsername}
+                  onChange={e => setAdminUsername(e.target.value)}
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-slate-100 font-mono focus:outline-none focus:border-gold-500/60"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">كلمة المرور (PIN):</label>
+                <input
+                  type="text"
+                  value={adminPassword}
+                  onChange={e => setAdminPassword(e.target.value)}
+                  className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2 text-slate-100 font-mono tracking-widest focus:outline-none focus:border-gold-500/60"
+                />
+              </div>
+              {adminError && (
+                <p className="text-red-400 text-[11px]">{adminError}</p>
+              )}
+              <div className="flex items-center justify-between pt-1">
+                {adminSaveSuccess && (
+                  <span className="text-xs text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> تم الحفظ
+                  </span>
+                )}
+                <Button type="submit" variant="gold" size="sm" className="mr-auto">
+                  <Save className="w-3.5 h-3.5 ml-1" />
+                  حفظ بيانات الأدمن
+                </Button>
+              </div>
+            </form>
+          </div>
+          <div className="space-y-6">
+            <div className="bg-dark-900 border border-dark-800 rounded-3xl p-6 shadow-sm">
             <h3 className="font-bold text-base text-slate-100 mb-2">
               النسخ الاحتياطي للبيانات
             </h3>
@@ -282,6 +357,7 @@ export const SettingsView: React.FC = () => {
                 />
               </label>
             </div>
+          </div>
           </div>
         </div>
       </div>

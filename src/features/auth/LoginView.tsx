@@ -5,8 +5,8 @@ import { ShieldCheck, UserCheck, KeyRound, Lock, User } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
   const { db, login } = useApp();
-  const [username, setUsername] = useState('admin');
-  const [pin, setPin] = useState('1234');
+  const [username, setUsername] = useState('');
+  const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -143,7 +143,7 @@ export const LoginView: React.FC = () => {
       </div>
 
       <p className="text-[11px] text-slate-600 mt-6 font-mono text-center">
-        Mohamed Ramshan Barber Shop Management System • v2.0
+        Mohamed Ramadan Barber Shop Management System • v2.0
       </p>
     </div>
   );
