@@ -16,6 +16,8 @@ import {
   Upload,
   CheckCircle2,
   ShieldCheck,
+  RotateCcw,
+  AlertTriangle,
 } from 'lucide-react';
 
 export const SettingsView: React.FC = () => {
@@ -39,6 +41,46 @@ export const SettingsView: React.FC = () => {
   const [editingService, setEditingService] = useState<ServiceType | null>(null);
   const [serviceName, setServiceName] = useState('');
   const [servicePrice, setServicePrice] = useState('80');
+
+  // Factory / Day 1 Reset Modal
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetType, setResetType] = useState<'fresh_start' | 'factory_default'>('fresh_start');
+  const [resetPinInput, setResetPinInput] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetSuccessMessage, setResetSuccessMessage] = useState('');
+
+  const handleOpenResetModal = (type: 'fresh_start' | 'factory_default') => {
+    setResetType(type);
+    setResetPinInput('');
+    setResetError('');
+    setIsResetModalOpen(true);
+  };
+
+  const handleConfirmReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    if (!resetPinInput.trim()) {
+      setResetError('يرجى إدخال كلمة مرور أو PIN الأدمن للتأكيد');
+      return;
+    }
+    if (resetPinInput.trim() !== (adminUser?.pinCode || 'Mr3770')) {
+      setResetError('كلمة مرور الأدمن غير صحيحة');
+      return;
+    }
+
+    if (resetType === 'fresh_start') {
+      dbStorage.resetToFreshInstallation();
+      setResetSuccessMessage('تم تصفير جميع العمليات والتذاكر بنجاح! الصالون جاهز الآن لبدء اليوم الأول من الصفر.');
+    } else {
+      dbStorage.resetToFactory();
+      setResetSuccessMessage('تمت استعادة ضبط المصنع الافتراضي للنظام بنجاح.');
+    }
+
+    setIsResetModalOpen(false);
+    setResetPinInput('');
+    refreshDb();
+    setTimeout(() => setResetSuccessMessage(''), 6000);
+  };
 
   const handleSaveShopInfo = (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,37 +369,75 @@ export const SettingsView: React.FC = () => {
             </form>
           </div>
           <div className="space-y-6">
+            {/* Backup card */}
             <div className="bg-dark-900 border border-dark-800 rounded-3xl p-6 shadow-sm">
-            <h3 className="font-bold text-base text-slate-100 mb-2">
-              النسخ الاحتياطي للبيانات
-            </h3>
-            <p className="text-xs text-slate-400 mb-5 leading-relaxed">
-              احفظ نسخة من بيانات المحل وسجلات الحلاقة والسلف على فلاش ميموري خارجي لضمان الأمان.
-            </p>
+              <h3 className="font-bold text-base text-slate-100 mb-2">
+                النسخ الاحتياطي للبيانات
+              </h3>
+              <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+                احفظ نسخة من بيانات المحل وسجلات الحلاقة والسلف على فلاش ميموري خارجي لضمان الأمان.
+              </p>
 
-            <div className="space-y-3 text-xs">
-              <Button
-                variant="outline-gold"
-                size="md"
-                className="w-full"
-                onClick={handleDownloadBackup}
-              >
-                <Download className="w-4 h-4 ml-2" />
-                تحميل نسخة احتياطية (.json)
-              </Button>
+              <div className="space-y-3 text-xs">
+                <Button
+                  variant="outline-gold"
+                  size="md"
+                  className="w-full"
+                  onClick={handleDownloadBackup}
+                >
+                  <Download className="w-4 h-4 ml-2" />
+                  تحميل نسخة احتياطية (.json)
+                </Button>
 
-              <label className="w-full inline-flex items-center justify-center font-bold rounded-xl transition text-xs px-4 py-2.5 bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 cursor-pointer">
-                <Upload className="w-4 h-4 ml-2" />
-                <span>استعادة البيانات من ملف</span>
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleRestoreFile}
-                  className="hidden"
-                />
-              </label>
+                <label className="w-full inline-flex items-center justify-center font-bold rounded-xl transition text-xs px-4 py-2.5 bg-dark-800 hover:bg-dark-750 text-slate-200 border border-dark-700 cursor-pointer">
+                  <Upload className="w-4 h-4 ml-2" />
+                  <span>استعادة البيانات من ملف</span>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleRestoreFile}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
-          </div>
+
+            {/* Factory / Day 1 Fresh Start Card */}
+            <div className="bg-dark-900 border border-red-900/40 rounded-3xl p-6 shadow-sm">
+              <h3 className="font-bold text-base text-red-300 mb-2 flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-red-400" />
+                تهيئة وبدء النظام من الصفر
+              </h3>
+              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                استخدم هذا الزر عندما تسلّم السيستم للعميل لتصفير كل التذاكر والسلف التجريبية، ويبدأ المحل من اليوم الأول برصيد صفر.
+              </p>
+
+              {resetSuccessMessage && (
+                <div className="mb-4 p-3 bg-emerald-950/60 border border-emerald-500/50 rounded-xl text-xs text-emerald-300 font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{resetSuccessMessage}</span>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenResetModal('fresh_start')}
+                  className="w-full py-2.5 px-4 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-700/50 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2"
+                >
+                  <RotateCcw className="w-4 h-4 text-red-400" />
+                  <span>تصفير العمليات وبدء اليوم الأول (Day 1)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenResetModal('factory_default')}
+                  className="w-full py-2 px-3 text-slate-500 hover:text-slate-300 text-[11px] transition text-center"
+                >
+                  إعادة ضبط المصنع بالكامل (Factory Reset)
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -402,6 +482,86 @@ export const SettingsView: React.FC = () => {
             <Button type="submit" variant="gold">
               {editingService ? 'حفظ التعديل' : 'إضافة نوع الحلاقة'}
             </Button>
+          </div>
+        </form>
+      </Modal>
+      {/* Factory / Day 1 Reset Security Modal */}
+      <Modal
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        title={
+          resetType === 'fresh_start'
+            ? 'تأكيد تصفير العمليات لبدء اليوم الأول'
+            : 'تأكيد استعادة ضبط المصنع بالكامل'
+        }
+        subtitle="عملية حساسة تتطلب تأكيد هوية الأدمن بكلمة المرور"
+      >
+        <form onSubmit={handleConfirmReset} className="space-y-4 text-xs">
+          <div className="p-3.5 bg-red-950/30 border border-red-800/50 rounded-2xl space-y-2">
+            <div className="flex items-center gap-2 text-red-400 font-bold">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>
+                {resetType === 'fresh_start'
+                  ? 'ماذا سيحدث عند الضغط على تصفير العمليات؟'
+                  : 'تنبيه: سيتم مسح كافة البيانات والعودة للوضع المبدئي!'}
+              </span>
+            </div>
+            {resetType === 'fresh_start' ? (
+              <ul className="text-slate-300 text-[11px] list-disc list-inside space-y-1">
+                <li>مسح جميع تذاكر الحلاقة السابقة.</li>
+                <li>مسح سجلات السلف والمصاريف والمستلزمات.</li>
+                <li>إعادة ضبط عداد التذاكر ليبدأ من (001) لليوم الأول.</li>
+                <li>
+                  <span className="text-emerald-400 font-semibold">
+                    سيتم الحفاظ على:
+                  </span>{' '}
+                  حسابات الموظفين، قائمة الأسعار، وإعدادات الصالون، ودخول الأدمن.
+                </li>
+              </ul>
+            ) : (
+              <p className="text-slate-300 text-[11px] leading-relaxed">
+                سيتم مسح أي تعديلات واستعادة البيانات الافتراضية الأصلية للمشروع.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">
+              أدخل كلمة مرور / PIN الأدمن للتأكيد ({adminUser?.username}):
+            </label>
+            <input
+              type="password"
+              required
+              autoFocus
+              value={resetPinInput}
+              onChange={e => setResetPinInput(e.target.value)}
+              placeholder="اكتب كلمة المرور..."
+              className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2.5 font-mono text-center tracking-widest text-slate-100 focus:outline-none focus:border-red-500"
+            />
+          </div>
+
+          {resetError && (
+            <div className="p-2.5 bg-red-950/50 border border-red-700/60 rounded-xl text-red-300 text-xs font-bold text-center">
+              {resetError}
+            </div>
+          )}
+
+          <div className="pt-2 flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsResetModalOpen(false)}
+            >
+              إلغاء وتراجع
+            </Button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition text-xs shadow-md"
+            >
+              {resetType === 'fresh_start'
+                ? 'نعم، صَفّر العمليات وابدأ من الصفر'
+                : 'نعم، استعد ضبط المصنع'}
+            </button>
           </div>
         </form>
       </Modal>

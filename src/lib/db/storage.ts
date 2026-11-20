@@ -118,6 +118,24 @@ export class StorageEngine {
     this.persist();
     this.notifyListeners();
   }
+
+  /**
+   * Resets transactions (operations, advances, expenses, shift logs, sequence) to zero
+   * so the salon can start fresh on Day 1, while preserving shop info, services,
+   * employees, and user login credentials.
+   */
+  public resetToFreshInstallation(): void {
+    if (!this.memoryDb) {
+      this.init();
+    }
+    const current = this.memoryDb!;
+    current.operations = [];
+    current.advances = [];
+    current.expenses = [];
+    current.shiftLogs = [];
+    this.persist();
+    this.notifyListeners();
+  }
 }
 
 export const dbStorage = StorageEngine.getInstance();

@@ -21,6 +21,25 @@ export interface EmployeeReportItem {
   netContribution: number;
 }
 
+export interface DailyFinancialRecord {
+  date: string; // YYYY-MM-DD
+  dayName: string; // الجمعة, السبت, etc.
+  formattedDate: string;
+  clientsCount: number;
+  revenue: number;
+  advancesTaken: number;
+  advancesRepaid: number;
+  expenses: number;
+  netDrawerCash: number;
+  topEmployeeName: string;
+  operationsCount: number;
+  employeeBreakdown: Array<{
+    name: string;
+    clientsCount: number;
+    revenue: number;
+  }>;
+}
+
 export interface PeriodReport {
   period: 'today' | 'week' | 'month' | 'all';
   totalClients: number;
@@ -255,7 +274,115 @@ export const reportService = {
     const wsExp = XLSX.utils.json_to_sheet(expData);
     XLSX.utils.book_append_sheet(wb, wsExp, 'سجل_المصاريف_والمستلزمات');
 
+    // 6. Daily Financial Breakdown Sheet (الإيراد اليومي بالتاريخ)
+    const dailyRecords = this.getDailyFinancialRecords(period);
+    const dailyData = dailyRecords.map(d => ({
+      'التاريخ': d.date,
+      'اليوم': d.dayName,
+      'عدد الزبائن': d.clientsCount,
+      'إيراد الحلاقة (جنيه)': d.revenue,
+      'السلف المسحوبة (جنيه)': d.advancesTaken,
+      'السلف المستردة (جنيه)': d.advancesRepaid,
+      'مصاريف ومستلزمات (جنيه)': d.expenses,
+      'صافي حركة الدرج (جنيه)': d.netDrawerCash,
+      'أعلى حلاق إيراداً': d.topEmployeeName,
+    }));
+    const wsDaily = XLSX.utils.json_to_sheet(dailyData);
+    XLSX.utils.book_append_sheet(wb, wsDaily, 'الإيراد_اليومي_بالتاريخ');
+
     const dateStr = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `تقرير_الصالون_${period}_${dateStr}.xlsx`);
+  },
+
+  getDailyFinancialRecords(
+    period: 'today' | 'week' | 'month' | 'all' | 'custom' = 'all',
+    customDate?: string
+  ): DailyFinancialRecord[] {
+    const db = dbStorage.getDb();
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const currentMonthStr = todayStr.slice(0, 7);
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Collect all distinct dates from operations, advances, expenses + today
+    const dateSet = new Set<string>();
+    dateSet.add(todayStr);
+    db.operations.forEach(o => {
+      if (o.createdAt) dateSet.add(o.createdAt.slice(0, 10));
+    });
+    db.advances.forEach(a => {
+      if (a.createdAt) dateSet.add(a.createdAt.slice(0, 10));
+    });
+    (db.expenses || []).forEach(e => {
+      if (e.createdAt) dateSet.add(e.createdAt.slice(0, 10));
+    });
+
+    const dayNamesArabic = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+
+    const sortedDates = Array.from(dateSet).sort().reverse();
+
+    const filteredDates = sortedDates.filter(dStr => {
+      if (period === 'today') return dStr === todayStr;
+      if (period === 'custom' && customDate) return dStr === customDate;
+      if (period === 'week') {
+        const d = new Date(dStr + 'T12:00:00');
+        return d >= oneWeekAgo;
+      }
+      if (period === 'month') {
+        return dStr.startsWith(currentMonthStr);
+      }
+      return true; // 'all'
+    });
+
+    return filteredDates.map(dStr => {
+      const d = new Date(dStr + 'T12:00:00');
+      const dayName = isNaN(d.getTime()) ? '' : dayNamesArabic[d.getDay()];
+
+      const ops = db.operations.filter(o => o.createdAt && o.createdAt.startsWith(dStr));
+      const advs = db.advances.filter(a => a.createdAt && a.createdAt.startsWith(dStr));
+      const exps = (db.expenses || []).filter(e => e.createdAt && e.createdAt.startsWith(dStr));
+
+      const revenue = ops.reduce((sum, o) => sum + o.amount, 0);
+      const clientsCount = ops.length;
+      const advancesTaken = advs.reduce((sum, a) => sum + a.amount, 0);
+      const advancesRepaid = advs.reduce((sum, a) => sum + a.repaidAmount, 0);
+      const expenses = exps.reduce((sum, e) => sum + e.amount, 0);
+      const netDrawerCash = revenue - advancesTaken + advancesRepaid - expenses;
+
+      // Group by employee for this date
+      const empMap: Record<string, { clientsCount: number; revenue: number }> = {};
+      ops.forEach(o => {
+        if (!empMap[o.employeeName]) {
+          empMap[o.employeeName] = { clientsCount: 0, revenue: 0 };
+        }
+        empMap[o.employeeName].clientsCount += 1;
+        empMap[o.employeeName].revenue += o.amount;
+      });
+
+      const employeeBreakdown = Object.entries(empMap)
+        .map(([name, data]) => ({
+          name,
+          clientsCount: data.clientsCount,
+          revenue: data.revenue,
+        }))
+        .sort((a, b) => b.revenue - a.revenue);
+
+      const topEmployeeName = employeeBreakdown.length > 0 ? employeeBreakdown[0].name : '-';
+
+      return {
+        date: dStr,
+        dayName,
+        formattedDate: dStr,
+        clientsCount,
+        revenue,
+        advancesTaken,
+        advancesRepaid,
+        expenses,
+        netDrawerCash,
+        topEmployeeName,
+        operationsCount: ops.length,
+        employeeBreakdown,
+      };
+    });
   },
 };

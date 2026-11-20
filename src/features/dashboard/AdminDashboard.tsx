@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { formatCurrency, formatDateTime, isToday } from '../../lib/utils';
 import { reportService } from '../../services/reportService';
 import { advanceService } from '../../services/advanceService';
+import { dbStorage } from '../../lib/db/storage';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
@@ -20,6 +21,8 @@ import {
   UserCheck,
   ShoppingBag,
   Calendar,
+  RotateCcw,
+  AlertTriangle,
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -35,6 +38,33 @@ export const AdminDashboard: React.FC = () => {
   const [repayAdvanceId, setRepayAdvanceId] = useState<string | null>(null);
   const [repayAmount, setRepayAmount] = useState<string>('100');
   const [repayNote, setRepayNote] = useState<string>('سداد نقدي في الدرج');
+
+  // Fresh Start / Reset Modal
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetPin, setResetPin] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
+
+  const adminUser = db.users.find(u => u.role === 'ADMIN');
+
+  const handleConfirmReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    if (!resetPin.trim()) {
+      setResetError('يرجى إدخال كلمة مرور أو PIN الأدمن');
+      return;
+    }
+    if (resetPin.trim() !== (adminUser?.pinCode || 'Mr3770')) {
+      setResetError('كلمة المرور غير صحيحة');
+      return;
+    }
+    dbStorage.resetToFreshInstallation();
+    setIsResetModalOpen(false);
+    setResetPin('');
+    refreshDb();
+    setResetSuccess('تم تصفير جميع العمليات والتذاكر بنجاح! الصالون يبدأ الآن من الصفر لليوم الأول.');
+    setTimeout(() => setResetSuccess(''), 6000);
+  };
 
   // Period Filter for employee performance cards
   type EmpPeriod = 'today' | 'week' | 'month' | 'year';
@@ -99,7 +129,21 @@ export const AdminDashboard: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-red-400 hover:text-red-300 hover:bg-red-950/40 border border-red-900/40"
+            onClick={() => {
+              setResetPin('');
+              setResetError('');
+              setIsResetModalOpen(true);
+            }}
+          >
+            <RotateCcw className="w-4 h-4 ml-1.5" />
+            تصفير وبدء من الصفر
+          </Button>
+
           <Button
             variant="outline-gold"
             size="sm"
@@ -117,6 +161,14 @@ export const AdminDashboard: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Fresh Start Success Notification */}
+      {resetSuccess && (
+        <div className="bg-emerald-950/50 border border-emerald-500/50 p-4 rounded-2xl flex items-center gap-3 text-xs text-emerald-300 font-bold shadow-lg">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span>{resetSuccess}</span>
+        </div>
+      )}
 
       {/* Pending Advances Alert Banner */}
       {pendingAdvances.length > 0 && (
@@ -533,6 +585,72 @@ export const AdminDashboard: React.FC = () => {
               </Button>
             </div>
           </div>
+        </Modal>
+      )}
+      {/* Day 1 Fresh Start Confirmation Modal */}
+      {isResetModalOpen && (
+        <Modal
+          isOpen={isResetModalOpen}
+          onClose={() => setIsResetModalOpen(false)}
+          title="تصفير العمليات وبدء اليوم الأول من الصفر"
+          subtitle="تجهيز السيستم للعميل بمسح التذاكر والسلف التجريبية"
+        >
+          <form onSubmit={handleConfirmReset} className="space-y-4 text-xs">
+            <div className="p-3.5 bg-red-950/30 border border-red-800/50 rounded-2xl space-y-2">
+              <div className="flex items-center gap-2 text-red-400 font-bold">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>ماذا يحدث عند تصفير السيستم؟</span>
+              </div>
+              <ul className="text-slate-300 text-[11px] list-disc list-inside space-y-1">
+                <li>مسح كافة تذاكر الحلاقة والعملاء المسجلين.</li>
+                <li>مسح كافة سجلات السلف والمصاريف والمستلزمات.</li>
+                <li>إعادة ضبط عداد التذاكر ليبدأ من (001) لليوم الأول.</li>
+                <li>
+                  <span className="text-emerald-400 font-semibold">
+                    يتم الحفاظ على:
+                  </span>{' '}
+                  حسابات الموظفين، قائمة الأسعار، وإعدادات الصالون، ودخول الأدمن.
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">
+                أدخل كلمة مرور / PIN الأدمن للتأكيد ({adminUser?.username}):
+              </label>
+              <input
+                type="password"
+                required
+                autoFocus
+                value={resetPin}
+                onChange={e => setResetPin(e.target.value)}
+                placeholder="اكتب كلمة المرور..."
+                className="w-full bg-dark-800 border border-dark-700 rounded-xl px-3 py-2.5 font-mono text-center tracking-widest text-slate-100 focus:outline-none focus:border-red-500"
+              />
+            </div>
+
+            {resetError && (
+              <div className="p-2.5 bg-red-950/50 border border-red-700/60 rounded-xl text-red-300 text-xs font-bold text-center">
+                {resetError}
+              </div>
+            )}
+
+            <div className="pt-2 flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsResetModalOpen(false)}
+              >
+                إلغاء
+              </Button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition text-xs shadow-md"
+              >
+                نعم، صَفّر العمليات وابدأ من الصفر
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>
