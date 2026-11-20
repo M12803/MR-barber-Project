@@ -87,8 +87,26 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             )}
             <div className="flex justify-between text-sm font-bold text-gold-400 pt-1">
               <span>الإجمالي المستحق:</span>
-              <span>{formatCurrency(transaction.collectedAmount)}</span>
+              <span>{formatCurrency(transaction.netTotal)}</span>
             </div>
+            {transaction.amountReceived !== undefined && (
+              <div className="flex justify-between text-[11px] text-slate-300">
+                <span>المستلم من العميل:</span>
+                <span className="font-bold">{formatCurrency(transaction.amountReceived)}</span>
+              </div>
+            )}
+            {transaction.changeAmount !== undefined && transaction.changeAmount > 0 && (
+              <div className="flex justify-between text-[11px] text-emerald-400 font-bold">
+                <span>الباقي المسترجع للعميل:</span>
+                <span>{formatCurrency(transaction.changeAmount)}</span>
+              </div>
+            )}
+            {transaction.outstandingAmount !== undefined && transaction.outstandingAmount > 0 && (
+              <div className="flex justify-between text-[11px] text-amber-400 font-bold">
+                <span>المتبقي آجل على العميل:</span>
+                <span>{formatCurrency(transaction.outstandingAmount)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-[11px] text-slate-400">
               <span>طريقة الدفع:</span>
               <span>{transaction.paymentMethod}</span>

@@ -54,6 +54,8 @@ export const exportService = {
       'الخصم': t.discountTotal,
       'الصافي': t.netTotal,
       'المبلغ المحصل': t.collectedAmount,
+      'المستلم من العميل': t.amountReceived || t.collectedAmount,
+      'الباقي للعميل': t.changeAmount || 0,
       'طريقة الدفع': t.paymentMethod,
       'عمولة الموظف': t.commissionSnapshot.totalCommission,
       'الحالة': t.status,

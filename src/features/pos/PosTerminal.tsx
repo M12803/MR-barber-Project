@@ -46,6 +46,7 @@ export const PosTerminal: React.FC = () => {
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [discountTotal, setDiscountTotal] = useState<number>(0);
+  const [amountReceived, setAmountReceived] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [completedTx, setCompletedTx] = useState<Transaction | null>(null);
@@ -102,6 +103,7 @@ export const PosTerminal: React.FC = () => {
   const clearCart = () => {
     setCart([]);
     setDiscountTotal(0);
+    setAmountReceived('');
     setCustomerName('');
     setCustomerPhone('');
     setNotes('');
@@ -113,6 +115,9 @@ export const PosTerminal: React.FC = () => {
     0
   );
   const netTotal = Math.max(0, grossTotal - discountTotal);
+  const parsedReceived = amountReceived !== '' ? Number(amountReceived) : netTotal;
+  const changeDue = parsedReceived > netTotal ? parsedReceived - netTotal : 0;
+  const outstandingDue = netTotal > parsedReceived ? netTotal - parsedReceived : 0;
 
   // Commission preview for the assigned employee
   const selectedEmp = db.employees.find(e => e.id === assignedEmployeeId);
@@ -158,6 +163,8 @@ export const PosTerminal: React.FC = () => {
           customerPhone: customerPhone.trim() || undefined,
           items: itemsPayload,
           discountTotal,
+          amountReceived: parsedReceived,
+          collectedAmount: Math.min(parsedReceived, netTotal),
           paymentMethod,
           notes: notes.trim() || undefined,
         },
@@ -433,6 +440,69 @@ export const PosTerminal: React.FC = () => {
                 />
                 <span className="text-slate-400">ج.م</span>
               </div>
+            </div>
+
+            {/* Amount Received from Customer (Cash tendered) */}
+            <div className="p-3 bg-dark-800/80 rounded-xl border border-dark-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <Banknote className="w-4 h-4 text-emerald-400" />
+                  <span>المبلغ المستلم من العميل:</span>
+                </span>
+                <div className="flex items-center gap-1 max-w-[130px]">
+                  <input
+                    type="number"
+                    min="0"
+                    value={amountReceived}
+                    onChange={e => setAmountReceived(e.target.value)}
+                    placeholder={String(netTotal)}
+                    className="w-full bg-dark-900 border border-dark-700 rounded-lg px-2.5 py-1 text-xs text-left font-bold font-mono text-gold-300 focus:outline-none focus:border-gold-500/60"
+                  />
+                  <span className="text-[11px] text-slate-400">ج.م</span>
+                </div>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundFx.playClick();
+                    setAmountReceived(String(netTotal));
+                  }}
+                  className="px-2 py-1 rounded-lg bg-dark-750 hover:bg-dark-700 text-[10px] font-semibold text-slate-300 border border-dark-700 whitespace-nowrap transition"
+                >
+                  المبلغ بالضبط
+                </button>
+                {[50, 100, 200, 500, 1000].map(amt => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => {
+                      soundFx.playClick();
+                      setAmountReceived(String(amt));
+                    }}
+                    className="px-2 py-1 rounded-lg bg-dark-750 hover:bg-dark-700 text-[10px] font-mono text-gold-400 border border-dark-700 whitespace-nowrap transition"
+                  >
+                    {amt}
+                  </button>
+                ))}
+              </div>
+
+              {/* Live Change / Outstanding Indicator */}
+              {changeDue > 0 && (
+                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs">
+                  <span className="font-semibold">الباقي للعميل (المسترجع):</span>
+                  <span className="font-extrabold font-mono text-sm">{formatCurrency(changeDue)}</span>
+                </div>
+              )}
+
+              {outstandingDue > 0 && (
+                <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs">
+                  <span className="font-semibold">المتبقي آجل على العميل:</span>
+                  <span className="font-extrabold font-mono text-sm">{formatCurrency(outstandingDue)}</span>
+                </div>
+              )}
             </div>
 
             {/* Financial Totals */}

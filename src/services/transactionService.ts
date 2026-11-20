@@ -19,6 +19,8 @@ export interface CreateTransactionInput {
     discount?: number;
   }>;
   discountTotal?: number;
+  amountReceived?: number;
+  collectedAmount?: number;
   paymentMethod: PaymentMethod;
   notes?: string;
   shiftId?: string;
@@ -80,7 +82,10 @@ export const transactionService = {
     });
 
     const netTotal = Math.max(0, computedGross - computedDiscounts);
-    const collectedAmount = netTotal;
+    const amountReceived = input.amountReceived !== undefined ? input.amountReceived : (input.collectedAmount !== undefined ? input.collectedAmount : netTotal);
+    const collectedAmount = input.collectedAmount !== undefined ? input.collectedAmount : Math.min(amountReceived, netTotal);
+    const changeAmount = amountReceived > netTotal ? amountReceived - netTotal : 0;
+    const outstandingAmount = Math.max(0, netTotal - collectedAmount);
     const totalCommission = lineItems.reduce((acc, curr) => acc + curr.commissionEarned, 0);
 
     const newTx: Transaction = {
@@ -97,6 +102,9 @@ export const transactionService = {
       discountTotal: computedDiscounts,
       netTotal,
       collectedAmount,
+      amountReceived,
+      changeAmount,
+      outstandingAmount,
       paymentMethod: input.paymentMethod,
       notes: input.notes,
       status: 'COMPLETED',

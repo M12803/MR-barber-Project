@@ -244,6 +244,24 @@ export const TransactionsView: React.FC = () => {
                 <span>المبلغ المحصل بالكامل:</span>
                 <span className="font-mono">{formatCurrency(selectedTx.collectedAmount)}</span>
               </div>
+              {selectedTx.amountReceived !== undefined && (
+                <div className="flex justify-between text-slate-300">
+                  <span>المستلم من العميل:</span>
+                  <span className="font-mono font-bold">{formatCurrency(selectedTx.amountReceived)}</span>
+                </div>
+              )}
+              {selectedTx.changeAmount !== undefined && selectedTx.changeAmount > 0 && (
+                <div className="flex justify-between text-emerald-400 font-bold">
+                  <span>الباقي للعميل:</span>
+                  <span className="font-mono">{formatCurrency(selectedTx.changeAmount)}</span>
+                </div>
+              )}
+              {selectedTx.outstandingAmount !== undefined && selectedTx.outstandingAmount > 0 && (
+                <div className="flex justify-between text-amber-400 font-bold">
+                  <span>المتبقي آجل:</span>
+                  <span className="font-mono">{formatCurrency(selectedTx.outstandingAmount)}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end pt-2">

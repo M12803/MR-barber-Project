@@ -95,6 +95,9 @@ export interface Transaction {
   discountTotal: number;
   netTotal: number;
   collectedAmount: number;
+  amountReceived?: number;     // المبلغ المستلم من العميل (المدفوع نقداً)
+  changeAmount?: number;       // الباقي للعميل
+  outstandingAmount?: number;  // المبلغ المتبقي على العميل (في حال الدفع الجزئي)
   paymentMethod: PaymentMethod;
   notes?: string;
   status: TransactionStatus;
