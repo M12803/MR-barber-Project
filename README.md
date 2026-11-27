@@ -12,6 +12,24 @@
 
 ---
 
+## 🖼️ لقطات من النظام (Screenshots)
+
+| تسجيل الدخول | لوحة التحكم |
+| :---: | :---: |
+| ![login](docs/screenshots/login.png) | ![dashboard](docs/screenshots/dashboard.png) |
+
+| المخزن والمنتجات | حركة البيع والشراء |
+| :---: | :---: |
+| ![inventory](docs/screenshots/inventory.png) | ![movements](docs/screenshots/inventory-movements.png) |
+
+| التقارير والإحصائيات |
+| :---: |
+| ![reports](docs/screenshots/reports.png) |
+
+> اللقطات من بيانات تجريبية.
+
+---
+
 ## ✨ المميزات (Key Features)
 
 | الوحدة | الوصف |
