@@ -2,7 +2,7 @@
 ### نظام إدارة صالون محمد رمشان الفاخر للرجال — Offline-First POS & Enterprise ERP
 
 <p align="center">
-  <img src="public/brand/logo.jpg" alt="MR Barbers Logo" width="180" style="border-radius: 50%; border: 3px solid #D4AF37; box-shadow: 0 4px 20px rgba(212, 175, 55, 0.4);" />
+  <img src="docs/banner.png" alt="MR Barbers" width="100%" />
 </p>
 
 <p align="center">
