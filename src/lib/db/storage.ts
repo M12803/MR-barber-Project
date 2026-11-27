@@ -37,6 +37,8 @@ export class StorageEngine {
           if (!Array.isArray(parsed.expenses)) {
             parsed.expenses = JSON.parse(JSON.stringify(INITIAL_DATABASE.expenses || []));
           }
+          if (!Array.isArray(parsed.products)) parsed.products = [];
+          if (!Array.isArray(parsed.stockMovements)) parsed.stockMovements = [];
           this.memoryDb = parsed;
           return;
         }
@@ -105,6 +107,8 @@ export class StorageEngine {
       }
 
       this.memoryDb = parsed as DatabaseSchema;
+      if (!Array.isArray(this.memoryDb.products)) this.memoryDb.products = [];
+      if (!Array.isArray(this.memoryDb.stockMovements)) this.memoryDb.stockMovements = [];
       this.persist();
       this.notifyListeners();
       return { success: true, message: 'تم استعادة قاعدة البيانات بنجاح.' };
@@ -133,6 +137,8 @@ export class StorageEngine {
     current.advances = [];
     current.expenses = [];
     current.shiftLogs = [];
+    current.products = [];
+    current.stockMovements = [];
     this.persist();
     this.notifyListeners();
   }
