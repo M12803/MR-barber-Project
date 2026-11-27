@@ -24,12 +24,11 @@
                             │
 ┌───────────────────────────▼────────────────────────────┐
 │                    Services Layer                      │
-│   `transactionService.ts`  - POS & Tickets Logic       │
-│   `advanceService.ts`      - Advances & Debt Cycles    │
-│   `cashboxService.ts`      - Shifts & Drawer Cash      │
-│   `exportService.ts`        - Multi-sheet Excel (.xlsx) │
-│   `auditService.ts`        - Immutable Security Trail  │
-│   `authService.ts`         - PIN / Role Verification   │
+│   `operationService.ts` - Barber operations            │
+│   `advanceService.ts`   - Advances & repayments        │
+│   `expenseService.ts`   - Shop expenses & supplies     │
+│   `productService.ts`   - Inventory, sales, purchases  │
+│   `reportService.ts`    - Reports, drawer, Excel export│
 └───────────────────────────┬────────────────────────────┘
                             │
 ┌───────────────────────────▼────────────────────────────┐
@@ -79,3 +78,14 @@
    - كل عملية دخول، بيع، اعتماد سلفة، تسجيل قسط، أو تعديل إعدادات يتم تسجيلها في `auditLogs` مع هوية المنفذ وتوقيتها الدقيق.
 3. **تصدير إكسيل مطابق للمواصفات**:
    - يتم تصدير مصنف إكسيل كامل يحتوي على 10 صفحات مفصلة بنقرة زر واحدة دون الحاجة لأي خادم أو اتصال خارجي.
+
+---
+
+## 📦 المخزن والمنتجات (Inventory)
+
+- `productService.ts` هو المكان الوحيد الذي يغيّر الكميات. كل تغيير يكتب صف في `stockMovements` ويحدّث `products[].stock` في نفس العملية.
+- البيع والشراء يدخلان نفس درج المحل في `reportService` كبنود منفصلة (`productSales`, `productPurchases`).
+- الحركات الملغاة تُستبعد من حسابات الدرج وتُعكس كمياتها.
+- التفاصيل وأسباب القرار: `docs/adr/0001-inventory-shared-drawer.md`.
+
+> ملاحظة: بعض الأقسام أعلاه (الأمان والتدقيق، الشاشات المذكورة) تمثل خارطة طريق ولم تُنفذ كلها بعد. الشاشات الموجودة فعلياً: الدخول، الحلاق، لوحة التحكم، الموظفون، العمليات والسلف والمصاريف، المخزن، التقارير، الإعدادات.
