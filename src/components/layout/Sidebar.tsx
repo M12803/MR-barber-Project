@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   Settings,
   HandCoins,
+  Package,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -23,6 +24,7 @@ export const Sidebar: React.FC = () => {
     { id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard, badge: undefined },
     { id: 'employees', label: 'الموظفون', icon: Users, badge: undefined },
     { id: 'operations', label: 'العمليات والسلف والمصاريف', icon: Receipt, badge: pendingAdvances > 0 ? pendingAdvances : undefined },
+    { id: 'inventory', label: 'المخزن والمنتجات', icon: Package, badge: undefined },
     { id: 'reports', label: 'التقارير والإحصائيات', icon: FileSpreadsheet, badge: undefined },
     { id: 'settings', label: 'الإعدادات والخدمات', icon: Settings, badge: undefined },
   ];

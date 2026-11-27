@@ -10,6 +10,7 @@ import { EmployeeHome } from '../features/employee-home/EmployeeHome';
 import { AdminDashboard } from '../features/dashboard/AdminDashboard';
 import { EmployeesView } from '../features/employees/EmployeesView';
 import { OperationsView } from '../features/operations/OperationsView';
+import { InventoryView } from '../features/inventory/InventoryView';
 import { ReportsView } from '../features/reports/ReportsView';
 import { SettingsView } from '../features/settings/SettingsView';
 
@@ -35,6 +36,8 @@ export const AppContent: React.FC = () => {
         return <EmployeesView />;
       case 'operations':
         return <OperationsView />;
+      case 'inventory':
+        return <InventoryView />;
       case 'reports':
         return <ReportsView />;
       case 'settings':

@@ -179,4 +179,6 @@ export const INITIAL_DATABASE: DatabaseSchema = {
       createdAt: new Date().toISOString(),
     },
   ],
+  products: [],
+  stockMovements: [],
 };
