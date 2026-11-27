@@ -92,6 +92,40 @@ export interface ShopExpense {
   createdAt: string; // ISO timestamp
 }
 
+export interface Product {
+  id: string;
+  name: string;
+  salePrice: number; // default selling price per unit
+  costPrice: number; // last purchase price per unit
+  stock: number; // current quantity on hand (changed ONLY through stock movements)
+  lowStockThreshold: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export type StockMovementType = 'SALE' | 'PURCHASE' | 'ADJUSTMENT';
+
+/** Immutable ledger row. Stock and drawer cash are both derived from these. */
+export interface StockMovement {
+  id: string;
+  movementNumber: string; // e.g. STK-0001
+  type: StockMovementType;
+  productId: string;
+  productName: string;
+  quantity: number; // always positive; ADJUSTMENT uses signedQuantity
+  signedQuantity: number; // +N added to stock, -N removed from stock
+  unitPrice: number; // sale price or purchase cost per unit
+  total: number; // quantity * unitPrice (cash in for SALE, cash out for PURCHASE, 0 for ADJUSTMENT)
+  partyName?: string; // customer (SALE) or supplier (PURCHASE)
+  notes?: string;
+  recordedByUserId: string;
+  recordedByName: string;
+  createdAt: string;
+  isVoided?: boolean;
+  voidedAt?: string;
+  voidNote?: string;
+}
+
 export interface DatabaseSchema {
   version: number;
   settings: ShopSettings;
@@ -104,4 +138,8 @@ export interface DatabaseSchema {
   shiftLogs: ShiftLog[];
   /** New collection for shop expenses and supplies */
   expenses: ShopExpense[];
+  /** Inventory products (stock is tied to the movements ledger) */
+  products: Product[];
+  /** Sales / purchases / adjustments ledger */
+  stockMovements: StockMovement[];
 }
