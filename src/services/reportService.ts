@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { dbStorage } from '../lib/db/storage';
 import { formatDateTime, isToday } from '../lib/utils';
+import { sumProductSales, sumProductPurchases } from './productService';
 
 export interface DashboardSummary {
   todayRevenue: number;
@@ -9,6 +10,8 @@ export interface DashboardSummary {
   todayExpenses: number;
   activeEmployees: number;
   drawerNetCash: number;
+  todayProductSales: number;
+  todayProductPurchases: number;
 }
 
 export interface EmployeeReportItem {
@@ -30,6 +33,8 @@ export interface DailyFinancialRecord {
   advancesTaken: number;
   advancesRepaid: number;
   expenses: number;
+  productSales: number;
+  productPurchases: number;
   netDrawerCash: number;
   topEmployeeName: string;
   operationsCount: number;
@@ -49,6 +54,8 @@ export interface PeriodReport {
   remainingAdvancesDebt: number;
   totalExpenses: number;
   drawerNetMovement: number;
+  productSales: number;
+  productPurchases: number;
   serviceCounts: Record<string, { count: number; total: number }>;
   employeeRanking: EmployeeReportItem[];
 }
@@ -74,7 +81,12 @@ export const reportService = {
     const allAdvancesTaken = db.advances.reduce((s, a) => s + a.amount, 0);
     const allAdvancesRepaid = db.advances.reduce((s, a) => s + a.repaidAmount, 0);
     const allExpenses = (db.expenses || []).reduce((s, e) => s + e.amount, 0);
-    const drawerNetCash = allRevenue - allAdvancesTaken + allAdvancesRepaid - allExpenses;
+    const allMovements = db.stockMovements || [];
+    // Product sales go IN the same drawer, product purchases come OUT of it
+    const drawerNetCash =
+      allRevenue - allAdvancesTaken + allAdvancesRepaid - allExpenses +
+      sumProductSales(allMovements) - sumProductPurchases(allMovements);
+    const todayMovements = allMovements.filter(m => isToday(m.createdAt));
 
     return {
       todayRevenue,
@@ -83,6 +95,8 @@ export const reportService = {
       todayExpenses,
       activeEmployees,
       drawerNetCash,
+      todayProductSales: sumProductSales(todayMovements),
+      todayProductPurchases: sumProductPurchases(todayMovements),
     };
   },
 
@@ -160,7 +174,18 @@ export const reportService = {
     });
 
     const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
-    const drawerNetMovement = totalRevenue - totalAdvancesTaken + totalAdvancesRepaid - totalExpenses;
+    const filteredMovements = (db.stockMovements || []).filter(m => {
+      if (period === 'all') return true;
+      if (period === 'today') return isToday(m.createdAt);
+      if (period === 'week') {
+        return new Date(m.createdAt) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      }
+      return m.createdAt.startsWith(todayStr.slice(0, 7));
+    });
+    const productSales = sumProductSales(filteredMovements);
+    const productPurchases = sumProductPurchases(filteredMovements);
+    const drawerNetMovement =
+      totalRevenue - totalAdvancesTaken + totalAdvancesRepaid - totalExpenses + productSales - productPurchases;
 
     // Employee ranking & performance
     const employeeRanking: EmployeeReportItem[] = db.employees.map(emp => {
@@ -195,6 +220,8 @@ export const reportService = {
       remainingAdvancesDebt,
       totalExpenses,
       drawerNetMovement,
+      productSales,
+      productPurchases,
       serviceCounts,
       employeeRanking,
     };
@@ -216,6 +243,8 @@ export const reportService = {
       { 'البيان': 'إجمالي السلف المستردة للدرج (جنيه)', 'القيمة': report.totalAdvancesRepaid },
       { 'البيان': 'متبقي السلف كمديونية (جنيه)', 'القيمة': report.remainingAdvancesDebt },
       { 'البيان': 'إجمالي مصاريف ومستلزمات المحل (جنيه)', 'القيمة': report.totalExpenses },
+      { 'البيان': 'مبيعات المنتجات للزبائن (جنيه)', 'القيمة': report.productSales },
+      { 'البيان': 'مشتريات المنتجات للمخزن (جنيه)', 'القيمة': report.productPurchases },
       { 'البيان': 'صافي حركة درج المحل (جنيه)', 'القيمة': report.drawerNetMovement },
     ];
     const wsSummary = XLSX.utils.json_to_sheet(summaryData);
@@ -284,11 +313,36 @@ export const reportService = {
       'السلف المسحوبة (جنيه)': d.advancesTaken,
       'السلف المستردة (جنيه)': d.advancesRepaid,
       'مصاريف ومستلزمات (جنيه)': d.expenses,
+      'مبيعات منتجات (جنيه)': d.productSales,
+      'مشتريات منتجات (جنيه)': d.productPurchases,
       'صافي حركة الدرج (جنيه)': d.netDrawerCash,
       'أعلى حلاق إيراداً': d.topEmployeeName,
     }));
     const wsDaily = XLSX.utils.json_to_sheet(dailyData);
     XLSX.utils.book_append_sheet(wb, wsDaily, 'الإيراد_اليومي_بالتاريخ');
+
+    // 7. Inventory sheets
+    const stockData = (db.products || []).map(p => ({
+      'المنتج': p.name,
+      'الكمية الحالية': p.stock,
+      'سعر البيع': p.salePrice,
+      'آخر سعر شراء': p.costPrice,
+      'قيمة المخزون بسعر الشراء': p.stock * p.costPrice,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stockData), 'المخزون');
+    const moveData = (db.stockMovements || []).map(m => ({
+      'الكود': m.movementNumber,
+      'التاريخ': formatDateTime(m.createdAt),
+      'النوع': m.type === 'SALE' ? 'بيع' : m.type === 'PURCHASE' ? 'شراء' : 'تسوية',
+      'المنتج': m.productName,
+      'الكمية': m.signedQuantity,
+      'سعر الوحدة': m.unitPrice,
+      'الإجمالي': m.total,
+      'العميل / المورد': m.partyName || '',
+      'المسجل': m.recordedByName,
+      'ملغاة': m.isVoided ? 'نعم' : 'لا',
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(moveData), 'حركة_المخزون');
 
     const dateStr = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `تقرير_الصالون_${period}_${dateStr}.xlsx`);
@@ -315,6 +369,9 @@ export const reportService = {
     });
     (db.expenses || []).forEach(e => {
       if (e.createdAt) dateSet.add(e.createdAt.slice(0, 10));
+    });
+    (db.stockMovements || []).forEach(m => {
+      if (m.createdAt) dateSet.add(m.createdAt.slice(0, 10));
     });
 
     const dayNamesArabic = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -347,7 +404,10 @@ export const reportService = {
       const advancesTaken = advs.reduce((sum, a) => sum + a.amount, 0);
       const advancesRepaid = advs.reduce((sum, a) => sum + a.repaidAmount, 0);
       const expenses = exps.reduce((sum, e) => sum + e.amount, 0);
-      const netDrawerCash = revenue - advancesTaken + advancesRepaid - expenses;
+      const dayMoves = (db.stockMovements || []).filter(m => m.createdAt && m.createdAt.startsWith(dStr));
+      const productSales = sumProductSales(dayMoves);
+      const productPurchases = sumProductPurchases(dayMoves);
+      const netDrawerCash = revenue - advancesTaken + advancesRepaid - expenses + productSales - productPurchases;
 
       // Group by employee for this date
       const empMap: Record<string, { clientsCount: number; revenue: number }> = {};
@@ -378,6 +438,8 @@ export const reportService = {
         advancesTaken,
         advancesRepaid,
         expenses,
+        productSales,
+        productPurchases,
         netDrawerCash,
         topEmployeeName,
         operationsCount: ops.length,
